@@ -14,7 +14,11 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeFirebase, setDocumentNonBlocking } from '@/firebase';
+import { initializeFirebase } from '@/firebase';
+
+import { auth } from 'firebase-admin';
+import { getApp } from 'firebase-admin/app';
+import { headers } from 'next/headers';
 
 
 // Report Analysis Action
@@ -22,7 +26,6 @@ const reportSchema = z.object({
   reportText: z
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
-  userId: z.string().min(1, { message: 'ID de usuario es requerido.' }),
   location: z.string().min(1, { message: 'La ubicación es requerida.' }),
 });
 
@@ -36,13 +39,33 @@ type ReportState = {
   };
 };
 
+async function getUserIdFromSessionCookie() {
+  try {
+    const sessionCookie = headers().get('__session');
+    if (!sessionCookie) return null;
+
+    // This requires firebase-admin to be initialized, which happens automatically
+    // in the Next.js environment on App Hosting.
+    const decodedToken = await auth().verifySessionCookie(sessionCookie, true);
+    return decodedToken.uid;
+  } catch (e) {
+    console.error('Error verifying session cookie:', e);
+    return null;
+  }
+}
+
 export async function analyzeReportAction(
   prevState: ReportState,
   formData: FormData
 ): Promise<ReportState> {
+
+  const userId = await getUserIdFromSessionCookie();
+  if (!userId) {
+    return { status: 'error', message: 'Usuario no autenticado. Por favor, inicie sesión.' };
+  }
+    
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
-    userId: formData.get('userId'),
     location: formData.get('location'),
   });
 
@@ -54,21 +77,19 @@ export async function analyzeReportAction(
     };
   }
   
-  const { reportText, userId, location } = validatedFields.data;
+  const { reportText, location } = validatedFields.data;
 
   let analysisResult: AnalyzeCitizenReportOutput;
 
   try {
-    // Intenta obtener el análisis de la IA
     analysisResult = await analyzeCitizenReport({
       reportText: reportText,
     });
   } catch (error) {
     console.warn("AI analysis failed. Proceeding with pending state.", error);
-    // Si la IA falla, crea un resultado por defecto
     analysisResult = {
       incidentType: 'Sin clasificar',
-      riskLevel: 'low', // Por defecto 'low' para que no cause pánico
+      riskLevel: 'low',
       summary: 'Análisis de IA pendiente. Un administrador revisará este reporte pronto.',
     };
   }
@@ -87,8 +108,7 @@ export async function analyzeReportAction(
       reportTime: new Date().toISOString(),
     };
     
-    // Usar non-blocking para una UI más rápida
-    addDoc(incidentReportsRef, newReport);
+    await addDoc(incidentReportsRef, newReport);
 
     revalidatePath('/');
     revalidatePath('/alerts');

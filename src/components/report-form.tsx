@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ReportAnalysis } from '@/components/report-analysis';
 import { Loader2, Send } from 'lucide-react';
-import { useUser } from '@/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
 
@@ -30,25 +29,26 @@ function SubmitButton() {
 
 export function ReportForm() {
   const { toast } = useToast();
-  const { user } = useUser();
-  const [state, formAction] = useActionState(analyzeReportAction, {
+  const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
 
   useEffect(() => {
+    if (isPending) return;
     if (state.status === 'success') {
       toast({
-        title: 'Análisis Completo',
+        title: 'Reporte Enviado',
         description: state.message,
       });
+      // Consider resetting the form here if needed
     } else if (state.status === 'error') {
       toast({
-        title: 'Análisis Fallido',
+        title: 'Error en el Reporte',
         description: state.message,
         variant: 'destructive',
       });
     }
-  }, [state, toast]);
+  }, [state, isPending, toast]);
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -61,8 +61,6 @@ export function ReportForm() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
-            <input type="hidden" name="userId" value={user?.uid ?? ''} />
-            
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea

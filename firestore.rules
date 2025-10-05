@@ -1,72 +1,73 @@
 /**
- * @fileoverview Firestore Security Rules for SafeCity Guardian.
- *
- * Core Philosophy:
- * This ruleset enforces a user-ownership model for user profiles and role-based access for incident reports. Users can only manage their own profiles.
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a user-ownership model for user profiles and allows public read access to incident reports, with owner-only access for creating, updating, and deleting reports.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profile information.  Each document ID matches the Firebase Auth UID.
- * - /incidentReports/{incidentReportId}: Stores incident reports.
+ * - /users/{userId}: Stores individual user profiles, secured with owner-only access.
+ * - /incidentReports/{incidentReportId}: Stores incident reports, publicly readable but writable only by the owner (creator).
  *
  * Key Security Decisions:
- * - Users can only read and write their own user profile.
- * - Incident reports are accessible to all users (read), but only admins can create, update, or delete them.
+ * - User profiles are strictly private and accessible only to the owning user.
+ * - Incident reports are publicly readable to facilitate community awareness.
+ * - Only the user who created an incident report can modify or delete it.
+ * - Listing of users is explicitly denied.
  *
  * Denormalization for Authorization:
- *  - Incident reports are secured using the user's role, read from their profile.
+ * - Incident reports rely on the `userId` field to enforce owner-only write access. This avoids the need for complex `get()` operations to determine ownership.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profile documents.
+     * @description Manages user profiles. Only the user themselves can read, update, or delete their profile.
      * @path /users/{userId}
-     * @allow (get, list, create, update, delete) - If the authenticated user's UID matches the {userId}.
-     * @deny (get, list, create, update, delete) - If the authenticated user's UID does not match the {userId}.
-     * @principle Enforces document ownership for user profiles.
+     * @allow (get, create, update, delete) User with matching {userId} can access their own profile.
+     * @deny (get, create, update, delete) User attempts to access another user's profile.
+     * @principle Enforces document ownership for all operations on user profiles.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-          return isOwner(userId) && resource != null;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      // Only signed-in users can access user profiles.
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false; // User listing is not permitted.
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isExistingOwner(userId);
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Controls access to incident reports.
+     * @description Manages incident reports. Allows public read access but restricts write access to the owner.
      * @path /incidentReports/{incidentReportId}
-     * @allow (get, list) - Any authenticated user can read incident reports.
-     * @allow (create, update, delete) - Only users with the 'admin' role can modify incident reports.
-     * @deny (create, update, delete) - Non-admin users cannot modify incident reports.
-     * @principle Enforces role-based access control for managing incident reports.
+     * @allow (get, list) Any user can read incident reports.
+     * @allow (create) A signed-in user can create an incident report, provided the `userId` matches their own.
+     * @allow (update, delete) Only the user who created the incident report can modify or delete it.
+     * @deny (create) A user attempts to create an incident report with a `userId` that doesn't match their own.
+     * @deny (update, delete) A user attempts to modify or delete an incident report they did not create.
+     * @principle Provides public read access while enforcing owner-only write access for data integrity.
      */
     match /incidentReports/{incidentReportId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isAdmin() {
-        return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      }
-
+      // Anyone can read incident reports.
       allow get, list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+
+      // Only signed-in users can create incident reports, and the userId must match.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Only the owner can update or delete incident reports, and the document must exist.
+      allow update: if isSignedIn() && isExistingOwner(resource.data.userId);
+      allow delete: if isSignedIn() && isExistingOwner(resource.data.userId);
     }
+  }
+
+  // Helper functions
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return request.auth.uid == userId;
+  }
+
+  function isExistingOwner(userId) {
+    return isSignedIn() && isOwner(userId) && resource != null;
   }
 }
