@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the SafeCity Guardian application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the user."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Indicates whether the user has administrator privileges."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "isAdmin"
+      ]
+    },
+    "IncidentReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "IncidentReport",
+      "type": "object",
+      "description": "Represents a report of an incident submitted by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the incident report entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the user who submitted the report. (Relationship: User 1:N IncidentReport)"
+        },
+        "incidentType": {
+          "type": "string",
+          "description": "The type of incident reported (e.g., robbery, vandalism)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the incident."
+        },
+        "location": {
+          "type": "string",
+          "description": "The location where the incident occurred."
+        },
+        "riskLevel": {
+          "type": "string",
+          "description": "The risk level associated with the incident (low, medium, high)."
+        },
+        "reportTime": {
+          "type": "string",
+          "description": "The date and time when the incident was reported.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "incidentType",
+        "description",
+        "location",
+        "riskLevel",
+        "reportTime"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information. Includes 'isAdmin' for authorization, enabling role-based access control without requiring additional reads.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "roles_admin",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "A document in this collection existing indicates that the user is an administrator. Existence over Content.  Used for role-based access control.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user who is an admin."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/incidentReports/{incidentReportId}",
+        "definition": {
+          "entityName": "IncidentReport",
+          "schema": {
+            "$ref": "#/backend/entities/IncidentReport"
+          },
+          "description": "Stores incident reports submitted by users. Path-based ownership ensures only the user and admins can access these.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user who created the incident report."
+            },
+            {
+              "name": "incidentReportId",
+              "description": "The unique identifier for the incident report."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure authorization independence, clarity, and scalability, adhering to the principles of DBAC (Database Authentication and Authorization Control) and QAPs (Rules are not Filters).  Authorization Independence is achieved through denormalization. Specifically, the `isAdmin` field is stored directly within the `/users/{userId}` document. This eliminates the need for security rules to perform `get()` operations to determine a user's role, enabling atomic operations and simplifying debugging.  The structure supports the required QAPs by segregating admin roles into a separate collection (`/roles_admin/{userId}`) and by using path-based ownership for user-related data such as incident reports (`/users/{userId}/incidentReports/{incidentReportId}`). This allows for secure `list` operations, as security rules can easily filter based on the existence of a user ID within the path."
+  }
+}

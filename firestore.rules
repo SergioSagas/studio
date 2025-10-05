@@ -1,0 +1,107 @@
+/**
+ * @fileoverview Firestore Security Rules for SafeCity Guardian.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a combination of user-ownership and role-based access control.
+ * User profiles are self-managed. Incident reports are owned by the user who created them,
+ * with administrative override capabilities for managing reports.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profile data, including an 'isAdmin' flag for role-based access.
+ * - /roles_admin/{userId}: Existence of the document indicates admin status.
+ * - /users/{userId}/incidentReports/{incidentReportId}: Stores incident reports created by a specific user.
+ *
+ * Key Security Decisions:
+ * - Users can only read and write their own profile data.
+ * - Incident reports can only be created, updated, and deleted by their owner.
+ * - Administrators can manage all incident reports.
+ * - `list` operations on `/users` is denied.
+ *
+ * Denormalization for Authorization:
+ * - The `isAdmin` field is stored directly on the `/users/{userId}` document to avoid extra reads during authorization.
+ * - The `roles_admin/{userId}` collection is a simple way to indicate admin rights.
+ *
+ * Structural Segregation:
+ * - User profiles and admin roles are kept in separate collections.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Controls access to user profile information.
+     * @path /users/{userId}
+     * @allow (create) User with matching userId can create their profile.
+     * @allow (get, update, delete) User with matching userId can access and modify their profile.
+     * @deny (create, get, update, delete) User cannot access or modify other user's profiles.
+     * @principle Enforces document ownership for writes.
+     */
+    match /users/{userId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+    
+    /**
+     * @description Controls access to admin role information.
+     * @path /roles_admin/{userId}
+     * @allow (create) User with matching userId can create their profile.
+     * @allow (get, update, delete) User with matching userId can access and modify their profile.
+     * @deny (create, get, update, delete) User cannot access or modify other user's profiles.
+     * @principle Enforces document ownership for writes.
+     */
+    match /roles_admin/{userId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    /**
+     * @description Controls access to incident reports submitted by users.
+     * @path /users/{userId}/incidentReports/{incidentReportId}
+     * @allow (create) User with matching userId can create incident reports.
+     * @allow (get, list, update, delete) User with matching userId or admin can access and modify their incident reports.
+     * @deny (create, get, list, update, delete) User cannot access or modify other user's incident reports, unless they are an admin.
+     * @principle Enforces document ownership for writes, allows admin override.
+     */
+    match /users/{userId}/incidentReports/{incidentReportId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      function isAdmin() {
+        return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      }
+
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(userId) || isAdmin());
+    }
+  }
+}
