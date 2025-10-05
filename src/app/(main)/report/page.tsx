@@ -7,55 +7,54 @@ import { useFirestore, addDocumentNonBlocking, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import type { IncidentReport } from '@/lib/data';
+import { useCallback, useState } from 'react';
 
 export default function NewReportPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const { user } = useUser();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleReportSubmit = async (
+  const handleReportSubmit = useCallback(async (
     analysisResult: AnalyzeCitizenReportOutput,
     formData: {
       reportText: string;
       location: string;
     }
   ) => {
-    if (!firestore) {
+    if (!firestore || !user || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const newReport: Omit<IncidentReport, 'id'> = {
+        incidentType: analysisResult.incidentType,
+        riskLevel: analysisResult.riskLevel,
+        summary: analysisResult.summary,
+        description: formData.reportText,
+        userId: user.uid,
+        location: formData.location,
+        reportTime: new Date().toISOString(),
+      };
+
+      const incidentReportsRef = collection(firestore, 'incidentReports');
+      await addDocumentNonBlocking(incidentReportsRef, newReport);
+
       toast({
-        variant: 'destructive',
-        title: 'Error de base de datos',
-        description: 'No se pudo conectar a la base de datos.',
+        title: 'Reporte Enviado',
+        description: 'Gracias por tu contribución a la seguridad de la comunidad.',
       });
-      return;
-    }
-
-    if (!user) {
-      toast({
+    } catch (error) {
+       toast({
         variant: 'destructive',
-        title: 'Error de autenticación',
-        description: 'No se pudo obtener la identificación del usuario. Intente recargar la página.',
+        title: 'Error al guardar',
+        description: 'No se pudo guardar el reporte en la base de datos.',
       });
-      return;
+    } finally {
+        // Reset submission state after a short delay to prevent rapid re-submissions
+        setTimeout(() => setIsSubmitting(false), 1000);
     }
-
-    const newReport: Omit<IncidentReport, 'id'> = {
-      incidentType: analysisResult.incidentType,
-      riskLevel: analysisResult.riskLevel,
-      summary: analysisResult.summary,
-      description: formData.reportText,
-      userId: user.uid,
-      location: formData.location,
-      reportTime: new Date().toISOString(),
-    };
-
-    const incidentReportsRef = collection(firestore, 'incidentReports');
-    addDocumentNonBlocking(incidentReportsRef, newReport);
-
-    toast({
-      title: 'Reporte Enviado',
-      description: 'Gracias por tu contribución a la seguridad de la comunidad.',
-    });
-  };
+  }, [firestore, user, toast, isSubmitting]);
 
   return (
     <div className="flex flex-col gap-8">

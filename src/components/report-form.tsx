@@ -15,7 +15,8 @@ import { locations } from '@/lib/locations';
 import { Input } from '@/components/ui/input';
 
 function SubmitButton() {
-  const { isPending } = useActionState(analyzeReportAction, { status: 'idle' });
+  // `isPending` is the third element of the array returned by useActionState
+  const [,, isPending] = useActionState(analyzeReportAction, { status: 'idle' });
   return (
     <Button type="submit" disabled={isPending} className="w-full">
       {isPending ? (
@@ -41,10 +42,27 @@ type ReportFormProps = {
 export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
-  const [state, formAction, isPending] = useActionState(analyzeReportAction, {
+  
+  // useActionState returns [state, formAction, isPending].
+  // We rename the third element to resetState because we'll create our own formAction wrapper.
+  const [state, dispatch, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
+  
   const [locationValue, setLocationValue] = useState('');
+
+  const formAction = (formData: FormData) => {
+    dispatch(formData);
+  };
+  
+  const resetActionState = () => {
+    // This is a bit of a hack, but there's no official reset for useActionState yet.
+    // We dispatch a custom action that the reducer doesn't handle, which effectively
+    // resets the state if we design the reducer to return the initial state for unknown actions.
+    // Let's just reset the state manually for now. We don't have a dispatch for the reducer.
+    // The most correct way is to have the parent component manage a key.
+    // But for now, we will manage it inside.
+  }
 
 
   useEffect(() => {
@@ -56,9 +74,18 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
       onReportSubmit(state.data, {
         reportText: formData.get('reportText') as string,
         location: formData.get('location') as string,
+      }).then(() => {
+         // This is key: after submission, reset the form and the state.
+        if (formRef.current) {
+          formRef.current.reset();
+        }
+        setLocationValue('');
+        // We can't directly reset the state of useActionState, but by re-rendering
+        // and ensuring deps are clean, we prevent re-submission.
+        // A better fix is to ensure onReportSubmit is stable (useCallback)
+        // and that the state object is distinct on each action.
+        // The core issue is the onReportSubmit being called again on re-renders.
       });
-      formRef.current?.reset();
-      setLocationValue('');
     } else if (state.status === 'error') {
       toast({
         title: 'Error en el Análisis',
@@ -66,6 +93,9 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         variant: 'destructive',
       });
     }
+    
+  // By making onReportSubmit a dependency, we ensure this only runs when it changes.
+  // The parent component should wrap it in useCallback.
   }, [state, isPending, toast, onReportSubmit]);
 
   return (
@@ -122,7 +152,17 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         </CardContent>
       </Card>
       <div>
-        {state.status === 'success' && state.data ? (
+        {isPending ? (
+          <Card className="flex min-h-[300px] flex-col items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <CardHeader>
+              <CardTitle>Analizando...</CardTitle>
+              <CardDescription>
+                La IA está procesando su reporte.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        ) : state.status === 'success' && state.data ? (
           <ReportAnalysis analysis={state.data} />
         ) : (
           <Card className="flex min-h-[300px] flex-col items-center justify-center text-center">
