@@ -227,7 +227,7 @@ export default function DashboardPage() {
                           <TooltipTrigger asChild>
                             <span className="cursor-default">{report.summary}</span>
                           </TooltipTrigger>
-                          <TooltipContent side="top" align="start" className="max-w-sm">
+                          <TooltipContent side="top" align="start" className="max-w-sm whitespace-normal">
                             <p>{report.summary}</p>
                           </TooltipContent>
                         </Tooltip>
