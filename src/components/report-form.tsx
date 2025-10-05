@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useActionState, useRef } from 'react';
+import { useEffect, useActionState, useRef, useState } from 'react';
 import { analyzeReportAction } from '@/app/actions';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +47,8 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
+  const [locationValue, setLocationValue] = useState('');
+
 
   useEffect(() => {
     if (isPending) return;
@@ -56,7 +58,6 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
       const userId = user?.uid;
       
       if (!userId) {
-        // This case is unlikely if the user is on this page, but good for safety.
         toast({
           variant: "destructive",
           title: "Error de autenticación",
@@ -71,6 +72,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         userId: userId,
       });
       formRef.current?.reset();
+      setLocationValue('');
     } else if (state.status === 'error') {
       toast({
         title: 'Error en el Análisis',
@@ -94,6 +96,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
             {user?.uid && (
               <Input type="hidden" name="userId" value={user.uid} />
             )}
+            <Input type="hidden" name="location" value={locationValue} />
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
@@ -111,9 +114,9 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
             </div>
 
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="location">Ubicación</Label>
-               <Select name="location" required>
-                <SelectTrigger id="location">
+              <Label htmlFor="location-select">Ubicación</Label>
+               <Select onValueChange={setLocationValue} required value={locationValue}>
+                <SelectTrigger id="location-select">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
                 <SelectContent>
