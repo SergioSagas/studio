@@ -36,6 +36,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -184,56 +190,65 @@ export default function DashboardPage() {
           {isLoadingHighPriority ? (
             <Loader className='h-48' />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Incidente</TableHead>
-                  <TableHead>Riesgo</TableHead>
-                  <TableHead className="hidden md:table-cell">Ubicación</TableHead>
-                  <TableHead className="hidden md:table-cell">Hora</TableHead>
-                  <TableHead>Resumen</TableHead>
-                  {role === 'admin' && <TableHead className="text-right">Acciones</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {highPriorityIncidents?.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell>
-                      <div className="font-medium">{report.incidentType}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={getRiskBadgeVariant(report.riskLevel)}
-                        className="capitalize"
-                      >
-                        {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {report.location}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {new Date(report.reportTime).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground truncate max-w-xs">
-                      {report.summary}
-                    </TableCell>
-                    {role === 'admin' && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(report.id)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+            <TooltipProvider>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Incidente</TableHead>
+                    <TableHead>Riesgo</TableHead>
+                    <TableHead className="hidden md:table-cell">Ubicación</TableHead>
+                    <TableHead className="hidden md:table-cell">Hora</TableHead>
+                    <TableHead>Resumen</TableHead>
+                    {role === 'admin' && <TableHead className="text-right">Acciones</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {highPriorityIncidents?.map((report) => (
+                    <TableRow key={report.id}>
+                      <TableCell>
+                        <div className="font-medium">{report.incidentType}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={getRiskBadgeVariant(report.riskLevel)}
+                          className="capitalize"
+                        >
+                          {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {report.location}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {new Date(report.reportTime).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate text-muted-foreground">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default">{report.summary}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-sm">
+                            <p>{report.summary}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                      {role === 'admin' && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(report.id)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>
