@@ -13,9 +13,6 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
-
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -58,46 +55,20 @@ export async function analyzeReportAction(
   
   const { reportText, location, userId } = validatedFields.data;
 
-  let analysisResult: AnalyzeCitizenReportOutput;
-
   try {
-    analysisResult = await analyzeCitizenReport({
+    const analysisResult = await analyzeCitizenReport({
       reportText: reportText,
       reportLocation: location,
     });
+    return { status: 'success', message: '¡Análisis de IA completado!', data: analysisResult };
   } catch (error) {
     console.warn("AI analysis failed. Proceeding with pending state.", error);
-    analysisResult = {
+    const pendingAnalysis: AnalyzeCitizenReportOutput = {
       incidentType: 'Sin clasificar',
       riskLevel: 'low',
       summary: 'Análisis de IA pendiente. Un administrador revisará este reporte pronto.',
     };
-  }
-
-  try {
-    const { firestore } = initializeFirebase();
-    const incidentReportsRef = collection(firestore, "incidentReports");
-    
-    const newReport: Omit<IncidentReport, 'id'> = {
-      incidentType: analysisResult.incidentType,
-      riskLevel: analysisResult.riskLevel,
-      summary: analysisResult.summary,
-      description: reportText,
-      userId: userId,
-      location: location,
-      reportTime: new Date().toISOString(),
-    };
-    
-    await addDoc(incidentReportsRef, newReport);
-
-    revalidatePath('/');
-    revalidatePath('/alerts');
-    revalidatePath('/patterns');
-    
-    return { status: 'success', message: '¡Reporte enviado! La IA lo ha procesado.', data: analysisResult };
-  } catch (error) {
-    console.error("Error in analyzeReportAction saving to Firestore: ", error);
-    return { status: 'error', message: 'No se pudo guardar el reporte en la base de datos.' };
+    return { status: 'success', message: 'Análisis de IA falló, pero el reporte será guardado.', data: pendingAnalysis };
   }
 }
 

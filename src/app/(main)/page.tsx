@@ -34,7 +34,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -85,13 +85,15 @@ export default function DashboardPage() {
     () => (firestore ? collection(firestore, 'incidentReports') : null),
     [firestore]
   );
-  const { data: reports, isLoading: isLoadingReports } = useCollection<Omit<IncidentReport, 'id'>>(reportsQuery);
+  
+  const highPriorityQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'incidentReports'), orderBy('reportTime', 'desc'), limit(5)) : null),
+    [firestore]
+  );
 
-  const highPriorityIncidents = useMemo(() => 
-    reports
-    ?.filter((report) => report.riskLevel === 'high')
-    .sort((a, b) => new Date(b.reportTime).getTime() - new Date(a.reportTime).getTime())
-    .slice(0, 5) ?? [], [reports]);
+  const { data: reports, isLoading: isLoadingReports } = useCollection<Omit<IncidentReport, 'id'>>(reportsQuery);
+  const { data: highPriorityIncidents, isLoading: isLoadingHighPriority } = useCollection<Omit<IncidentReport, 'id'>>(highPriorityQuery);
+
 
   const activeAlerts = useMemo(() => reports?.filter(
     (r) => r.riskLevel === 'high' || r.riskLevel === 'medium'
@@ -173,13 +175,13 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Incidentes Recientes de Alta Prioridad</CardTitle>
+          <CardTitle>Incidentes Recientes</CardTitle>
           <CardDescription>
-            Un resumen de los reportes más críticos.
+            Un resumen de los reportes más recientes.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoadingReports ? (
+          {isLoadingHighPriority ? (
             <Loader className='h-48' />
           ) : (
             <Table>
@@ -194,7 +196,7 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {highPriorityIncidents.map((report) => (
+                {highPriorityIncidents?.map((report) => (
                   <TableRow key={report.id}>
                     <TableCell>
                       <div className="font-medium">{report.incidentType}</div>

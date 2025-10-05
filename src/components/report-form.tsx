@@ -3,6 +3,7 @@
 import { useEffect, useActionState, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { analyzeReportAction } from '@/app/actions';
+import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,9 +30,20 @@ function SubmitButton() {
   );
 }
 
-export function ReportForm() {
+type ReportFormProps = {
+  onReportSubmit: (
+    analysisResult: AnalyzeCitizenReportOutput,
+    formData: {
+      reportText: string;
+      location: string;
+      userId: string;
+    }
+  ) => Promise<void>;
+};
+
+export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const { toast } = useToast();
-  const auth = useAuth();
+  const { user } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
@@ -39,23 +51,34 @@ export function ReportForm() {
 
   useEffect(() => {
     if (isPending) return;
-    if (state.status === 'success') {
-      toast({
-        title: 'Reporte Enviado',
-        description: state.message,
+
+    if (state.status === 'success' && state.data) {
+      const formData = new FormData(formRef.current!);
+      onReportSubmit(state.data, {
+        reportText: formData.get('reportText') as string,
+        location: formData.get('location') as string,
+        userId: formData.get('userId') as string,
       });
       formRef.current?.reset();
     } else if (state.status === 'error') {
       toast({
-        title: 'Error en el Reporte',
+        title: 'Error en el Análisis',
         description: state.message,
         variant: 'destructive',
       });
     }
-  }, [state, isPending, toast]);
+  }, [state, isPending, toast, onReportSubmit]);
 
-  const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) {
+        toast({
+            variant: "destructive",
+            title: "Usuario no autenticado",
+            description: "Por favor, inicie sesión para enviar un reporte."
+        });
+        return;
+    }
     const formData = new FormData(event.currentTarget);
     formAction(formData);
   };
@@ -72,8 +95,8 @@ export function ReportForm() {
         </CardHeader>
         <CardContent>
           <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
-            {auth?.currentUser?.uid && (
-              <Input type="hidden" name="userId" value={auth.currentUser.uid} />
+            {user?.uid && (
+              <Input type="hidden" name="userId" value={user.uid} />
             )}
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
