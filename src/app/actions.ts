@@ -36,11 +36,6 @@ export async function analyzeReportAction(
   prevState: ReportState,
   formData: FormData
 ): Promise<ReportState> {
-  // A simple way to allow resetting the state from the client.
-  if (formData === 'RESET') {
-    return { status: 'idle' };
-  }
-    
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     location: formData.get('location'),

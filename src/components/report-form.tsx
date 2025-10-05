@@ -46,13 +46,20 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
+
+  // Local state to track if we've handled the successful submission.
+  const [submissionHandled, setSubmissionHandled] = useState(false);
   
   const [locationValue, setLocationValue] = useState('');
 
   useEffect(() => {
-    if (isPending) return;
+    if (isPending) {
+        // When a new submission starts, reset the handled flag.
+        setSubmissionHandled(false);
+        return;
+    };
 
-    if (state.status === 'success' && state.data) {
+    if (state.status === 'success' && state.data && !submissionHandled) {
       const formData = new FormData(formRef.current!);
       
       onReportSubmit(state.data, {
@@ -63,10 +70,8 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
           formRef.current.reset();
         }
         setLocationValue('');
-        // This is a workaround to reset the state of useActionState.
-        // It relies on the reducer returning the initial state for an unknown action type.
-        // A better API for resetting is needed from React.
-        (formAction as any)('RESET');
+        // Mark this submission as handled to prevent re-triggering.
+        setSubmissionHandled(true);
       });
     } else if (state.status === 'error') {
       toast({
@@ -74,9 +79,11 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         description: state.message,
         variant: 'destructive',
       });
+      // Mark as handled to prevent re-triggering error toasts.
+      setSubmissionHandled(true);
     }
     
-  }, [state, isPending, toast, onReportSubmit, formAction]);
+  }, [state, isPending, toast, onReportSubmit, submissionHandled]);
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -142,7 +149,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
               </CardDescription>
             </CardHeader>
           </Card>
-        ) : state.status === 'success' && state.data ? (
+        ) : state.status === 'success' && state.data && !isPending ? (
           <ReportAnalysis analysis={state.data} />
         ) : (
           <Card className="flex min-h-[300px] flex-col items-center justify-center text-center">
