@@ -11,6 +11,7 @@ import { collection } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { type DetectCrimePatternsOutput } from '@/ai/flows/detect-crime-patterns.flow';
 import { Loader } from '@/components/ui/loader';
+import { cleanLocationName } from '@/lib/utils';
 
 export default function PatternsPage() {
   const firestore = useFirestore();
@@ -26,7 +27,11 @@ export default function PatternsPage() {
   useEffect(() => {
     if (reports) {
       setIsLoadingPatterns(true);
-      fetchCrimePatternsAction(reports)
+      const cleanedReports = reports.map(r => ({
+        ...r,
+        location: cleanLocationName(r.location),
+      }));
+      fetchCrimePatternsAction(cleanedReports)
         .then(data => {
           setPatternsData(data);
         })

@@ -11,7 +11,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { type IncidentReport } from '@/lib/data';
-import { cn } from '@/lib/utils';
+import { cn, cleanLocationName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -116,7 +116,8 @@ export default function DashboardPage() {
     const riskCountsByLocation = reports
       .filter(r => r.riskLevel === 'high' || r.riskLevel === 'medium')
       .reduce((acc, report) => {
-        acc[report.location] = (acc[report.location] || 0) + 1;
+        const location = cleanLocationName(report.location);
+        acc[location] = (acc[location] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
@@ -232,7 +233,7 @@ export default function DashboardPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {report.location}
+                        {cleanLocationName(report.location)}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {new Date(report.reportTime).toLocaleString()}
