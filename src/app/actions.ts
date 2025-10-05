@@ -16,25 +16,6 @@ import { revalidatePath } from 'next/cache';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
 
-import { auth } from 'firebase-admin';
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-
-// Initialize Firebase Admin SDK
-if (getApps().length === 0) {
-  try {
-    // This works in App Hosting
-    initializeApp();
-  } catch (e) {
-    // For local dev, use service account credentials
-    if (process.env.SERVICE_ACCOUNT_KEY) {
-      initializeApp({
-        credential: cert(JSON.parse(process.env.SERVICE_ACCOUNT_KEY)),
-      });
-    } else {
-        console.warn("Firebase Admin SDK initialization failed. SERVICE_ACCOUNT_KEY is not set.");
-    }
-  }
-}
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -42,7 +23,7 @@ const reportSchema = z.object({
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
   location: z.string().min(1, { message: 'La ubicación es requerida.' }),
-  idToken: z.string().min(1, { message: 'Token de autenticación requerido.' }),
+  userId: z.string().min(1, { message: 'Usuario no autenticado.' }),
 });
 
 type ReportState = {
@@ -52,18 +33,9 @@ type ReportState = {
   errors?: {
     reportText?: string[];
     location?: string[];
+    userId?: string[];
   };
 };
-
-async function getUserIdFromIdToken(idToken: string) {
-  try {
-    const decodedToken = await auth().verifyIdToken(idToken);
-    return decodedToken.uid;
-  } catch (e) {
-    console.error('Error verifying ID token:', e);
-    return null;
-  }
-}
 
 export async function analyzeReportAction(
   prevState: ReportState,
@@ -73,14 +45,10 @@ export async function analyzeReportAction(
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     location: formData.get('location'),
-    idToken: formData.get('idToken'),
+    userId: formData.get('userId'),
   });
 
   if (!validatedFields.success) {
-    // This is a developer error if token is missing, but we handle it gracefully
-     if (validatedFields.error.flatten().fieldErrors.idToken) {
-       return { status: 'error', message: 'Usuario no autenticado. Por favor, inicie sesión.' };
-     }
     return {
       status: 'error',
       message: 'Datos de formulario inválidos.',
@@ -88,12 +56,7 @@ export async function analyzeReportAction(
     };
   }
   
-  const { reportText, location, idToken } = validatedFields.data;
-
-  const userId = await getUserIdFromIdToken(idToken);
-  if (!userId) {
-    return { status: 'error', message: 'La sesión ha expirado. Por favor, inicie sesión de nuevo.' };
-  }
+  const { reportText, location, userId } = validatedFields.data;
 
   let analysisResult: AnalyzeCitizenReportOutput;
 

@@ -13,6 +13,7 @@ import { Loader2, Send } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
 import { useAuth } from '@/firebase';
+import { Input } from '@/components/ui/input';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -56,26 +57,7 @@ export function ReportForm() {
   const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    
-    if (auth.currentUser) {
-      try {
-        const token = await auth.currentUser.getIdToken();
-        formData.append('idToken', token);
-        formAction(formData);
-      } catch (error) {
-        toast({
-          title: 'Error de Autenticación',
-          description: 'No se pudo verificar tu sesión. Por favor, intenta iniciar sesión de nuevo.',
-          variant: 'destructive',
-        });
-      }
-    } else {
-       toast({
-        title: 'Usuario no autenticado',
-        description: 'Por favor, inicia sesión para enviar un reporte.',
-        variant: 'destructive',
-      });
-    }
+    formAction(formData);
   };
 
 
@@ -90,6 +72,9 @@ export function ReportForm() {
         </CardHeader>
         <CardContent>
           <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
+            {auth?.currentUser?.uid && (
+              <Input type="hidden" name="userId" value={auth.currentUser.uid} />
+            )}
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
