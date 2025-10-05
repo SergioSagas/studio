@@ -54,10 +54,21 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
 
     if (state.status === 'success' && state.data) {
       const formData = new FormData(formRef.current!);
+      const userId = user?.uid;
+      
+      if (!userId) {
+        toast({
+          variant: "destructive",
+          title: "Error de autenticación",
+          description: "No se pudo obtener la identificación del usuario. Intente recargar la página."
+        });
+        return;
+      }
+
       onReportSubmit(state.data, {
         reportText: formData.get('reportText') as string,
         location: formData.get('location') as string,
-        userId: formData.get('userId') as string,
+        userId: userId,
       });
       formRef.current?.reset();
     } else if (state.status === 'error') {
@@ -67,18 +78,10 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         variant: 'destructive',
       });
     }
-  }, [state, isPending, toast, onReportSubmit]);
+  }, [state, isPending, toast, onReportSubmit, user]);
 
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!user) {
-        toast({
-            variant: "destructive",
-            title: "Usuario no autenticado",
-            description: "Por favor, inicie sesión para enviar un reporte."
-        });
-        return;
-    }
     const formData = new FormData(event.currentTarget);
     formAction(formData);
   };

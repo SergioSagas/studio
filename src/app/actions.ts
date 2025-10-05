@@ -53,7 +53,7 @@ export async function analyzeReportAction(
     };
   }
   
-  const { reportText, location, userId } = validatedFields.data;
+  const { reportText, location } = validatedFields.data;
 
   try {
     const analysisResult = await analyzeCitizenReport({
