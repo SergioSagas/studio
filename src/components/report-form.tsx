@@ -57,6 +57,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
       const userId = user?.uid;
       
       if (!userId) {
+        // This case is unlikely if the user is on this page, but good for safety.
         toast({
           variant: "destructive",
           title: "Error de autenticación",
@@ -64,7 +65,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         });
         return;
       }
-
+      
       onReportSubmit(state.data, {
         reportText: formData.get('reportText') as string,
         location: formData.get('location') as string,
@@ -80,13 +81,6 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
     }
   }, [state, isPending, toast, onReportSubmit, user]);
 
-  const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    formAction(formData);
-  };
-
-
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <Card>
@@ -97,7 +91,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
+          <form ref={formRef} action={formAction} className="space-y-4">
             {user?.uid && (
               <Input type="hidden" name="userId" value={user.uid} />
             )}
