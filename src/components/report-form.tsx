@@ -43,27 +43,11 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   
-  // useActionState returns [state, formAction, isPending].
-  // We rename the third element to resetState because we'll create our own formAction wrapper.
-  const [state, dispatch, isPending] = useActionState(analyzeReportAction, {
+  const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
   
   const [locationValue, setLocationValue] = useState('');
-
-  const formAction = (formData: FormData) => {
-    dispatch(formData);
-  };
-  
-  const resetActionState = () => {
-    // This is a bit of a hack, but there's no official reset for useActionState yet.
-    // We dispatch a custom action that the reducer doesn't handle, which effectively
-    // resets the state if we design the reducer to return the initial state for unknown actions.
-    // Let's just reset the state manually for now. We don't have a dispatch for the reducer.
-    // The most correct way is to have the parent component manage a key.
-    // But for now, we will manage it inside.
-  }
-
 
   useEffect(() => {
     if (isPending) return;
@@ -75,16 +59,14 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         reportText: formData.get('reportText') as string,
         location: formData.get('location') as string,
       }).then(() => {
-         // This is key: after submission, reset the form and the state.
         if (formRef.current) {
           formRef.current.reset();
         }
         setLocationValue('');
-        // We can't directly reset the state of useActionState, but by re-rendering
-        // and ensuring deps are clean, we prevent re-submission.
-        // A better fix is to ensure onReportSubmit is stable (useCallback)
-        // and that the state object is distinct on each action.
-        // The core issue is the onReportSubmit being called again on re-renders.
+        // This is a workaround to reset the state of useActionState.
+        // It relies on the reducer returning the initial state for an unknown action type.
+        // A better API for resetting is needed from React.
+        (formAction as any)('RESET');
       });
     } else if (state.status === 'error') {
       toast({
@@ -94,9 +76,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
       });
     }
     
-  // By making onReportSubmit a dependency, we ensure this only runs when it changes.
-  // The parent component should wrap it in useCallback.
-  }, [state, isPending, toast, onReportSubmit]);
+  }, [state, isPending, toast, onReportSubmit, formAction]);
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
