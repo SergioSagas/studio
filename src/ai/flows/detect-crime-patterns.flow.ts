@@ -14,11 +14,11 @@ import {z} from 'genkit';
 const DetectCrimePatternsInputSchema = z.object({
   reports: z.array(
     z.object({
-      incidentType: z.string().describe('Type of incident (robbery, vandalism, noise, accident, etc.)'),
-      location: z.string().describe('Location of the incident'),
-      time: z.string().describe('Time of the incident'),
+      incidentType: z.string().describe('Tipo de incidente (robo, vandalismo, ruido, accidente, etc.)'),
+      location: z.string().describe('Ubicación del incidente'),
+      time: z.string().describe('Hora del incidente'),
     })
-  ).describe('Array of incident reports'),
+  ).describe('Array de informes de incidentes'),
 });
 
 export type DetectCrimePatternsInput = z.infer<typeof DetectCrimePatternsInputSchema>;
@@ -26,12 +26,12 @@ export type DetectCrimePatternsInput = z.infer<typeof DetectCrimePatternsInputSc
 const DetectCrimePatternsOutputSchema = z.object({
   patterns: z.array(
     z.object({
-      zone: z.string().describe('Zone where the crime pattern is detected'),
-      time: z.string().describe('Time when the crime pattern is detected'),
-      incidentTypes: z.array(z.string()).describe('Types of incidents in the pattern'),
-      frequency: z.number().describe('Frequency of the crime pattern'),
+      zone: z.string().describe('Zona donde se detecta el patrón de delincuencia'),
+      time: z.string().describe('Hora en que se detecta el patrón de delincuencia'),
+      incidentTypes: z.array(z.string()).describe('Tipos de incidentes en el patrón'),
+      frequency: z.number().describe('Frecuencia del patrón de delincuencia'),
     })
-  ).describe('Array of detected crime patterns'),
+  ).describe('Array de patrones de delincuencia detectados'),
 });
 
 export type DetectCrimePatternsOutput = z.infer<typeof DetectCrimePatternsOutputSchema>;
@@ -44,7 +44,7 @@ const prompt = ai.definePrompt({
   name: 'detectCrimePatternsPrompt',
   input: {schema: DetectCrimePatternsInputSchema},
   output: {schema: DetectCrimePatternsOutputSchema},
-  prompt: `You are an expert crime analyst. Analyze the following incident reports to detect frequent crime patterns by zone and time.\n\nIncident Reports:\n{{#each reports}}\n- Type: {{this.incidentType}}, Location: {{this.location}}, Time: {{this.time}}\n{{/each}}\n\nIdentify patterns including zone, time, incident types and frequency.\n\nReturn the detected crime patterns in JSON format.`,
+  prompt: `Eres un analista experto en criminología. Analiza los siguientes informes de incidentes para detectar patrones de delincuencia frecuentes por zona y hora.\n\nInformes de Incidentes:\n{{#each reports}}\n- Tipo: {{this.incidentType}}, Ubicación: {{this.location}}, Hora: {{this.time}}\n{{/each}}\n\nIdentifica patrones que incluyan zona, hora, tipos de incidentes y frecuencia.\n\nDevuelve los patrones de delincuencia detectados en formato JSON.`,
 });
 
 const detectCrimePatternsFlow = ai.defineFlow(

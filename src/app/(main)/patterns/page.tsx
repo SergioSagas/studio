@@ -11,8 +11,8 @@ export default async function PatternsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Crime Pattern Analysis"
-        description="AI-powered insights into incident trends and hotspots."
+        title="Análisis de Patrones de Delincuencia"
+        description="Información impulsada por IA sobre tendencias de incidentes y puntos calientes."
       />
 
       {patternsData && patternsData.patterns.length > 0 ? (
@@ -20,9 +20,9 @@ export default async function PatternsPage() {
       ) : (
         <Card className="flex min-h-[300px] flex-col items-center justify-center text-center">
             <CardHeader>
-                <CardTitle>No Pattern Data</CardTitle>
+                <CardTitle>Sin Datos de Patrones</CardTitle>
                 <CardDescription>
-                    Could not detect significant patterns from the current report data.
+                    No se pudieron detectar patrones significativos a partir de los datos de informes actuales.
                 </CardDescription>
             </CardHeader>
             <CardContent>

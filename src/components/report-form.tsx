@@ -20,7 +20,7 @@ function SubmitButton() {
       ) : (
         <Send className="mr-2 h-4 w-4" />
       )}
-      Analyze Report
+      Analizar Reporte
     </Button>
   );
 }
@@ -34,12 +34,12 @@ export function ReportForm() {
   useEffect(() => {
     if (state.status === 'success') {
       toast({
-        title: 'Analysis Complete',
+        title: 'Análisis Completo',
         description: state.message,
       });
     } else if (state.status === 'error') {
       toast({
-        title: 'Analysis Failed',
+        title: 'Análisis Fallido',
         description: state.message,
         variant: 'destructive',
       });
@@ -50,20 +50,19 @@ export function ReportForm() {
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Submit Incident Report</CardTitle>
+          <CardTitle>Enviar Reporte de Incidente</CardTitle>
           <CardDescription>
-            Provide a detailed, anonymous description of the incident. The AI will
-            analyze it for risk and type.
+            Proporcione una descripción detallada y anónima del incidente. La IA lo analizará para determinar el riesgo y el tipo.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="reportText">Incident Details</Label>
+              <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
                 id="reportText"
                 name="reportText"
-                placeholder="Describe the situation, location, and any other relevant details..."
+                placeholder="Describa la situación, ubicación y cualquier otro detalle relevante..."
                 className="min-h-[150px]"
                 required
               />
@@ -83,9 +82,9 @@ export function ReportForm() {
         ) : (
           <Card className="flex min-h-[300px] flex-col items-center justify-center text-center">
             <CardHeader>
-              <CardTitle>Awaiting Analysis</CardTitle>
+              <CardTitle>Esperando Análisis</CardTitle>
               <CardDescription>
-                Your report's AI analysis will appear here.
+                El análisis de IA de su reporte aparecerá aquí.
               </CardDescription>
             </CardHeader>
             <CardContent>

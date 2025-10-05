@@ -14,14 +14,14 @@ import {z} from 'genkit';
 const RecommendSafeRoutesInputSchema = z.object({
   startLocation: z
     .string()
-    .describe('The starting location for the route recommendation.'),
+    .describe('La ubicación de inicio para la recomendación de ruta.'),
   endLocation: z
     .string()
-    .describe('The destination location for the route recommendation.'),
+    .describe('La ubicación de destino para la recomendación de ruta.'),
   transportMode: z
     .enum(['pedestrian', 'public_transport'])
-    .describe('The mode of transportation (pedestrian or public transport).'),
-  incidentData: z.string().optional().describe('Optional data on recent incidents in the area.'),
+    .describe('El modo de transporte (peatón o transporte público).'),
+  incidentData: z.string().optional().describe('Datos opcionales sobre incidentes recientes en la zona.'),
 });
 
 export type RecommendSafeRoutesInput = z.infer<typeof RecommendSafeRoutesInputSchema>;
@@ -29,11 +29,11 @@ export type RecommendSafeRoutesInput = z.infer<typeof RecommendSafeRoutesInputSc
 const RecommendSafeRoutesOutputSchema = z.object({
   safeRoutes: z.array(
     z.object({
-      routeDescription: z.string().describe('A description of the recommended route.'),
-      riskAssessment: z.string().describe('An assessment of the safety/risk level of the route.'),
+      routeDescription: z.string().describe('Una descripción de la ruta recomendada.'),
+      riskAssessment: z.string().describe('Una evaluación del nivel de seguridad/riesgo de la ruta.'),
     })
-  ).describe('Recommended safe routes with risk assessments.'),
-  overallRecommendation: z.string().describe('An overall recommendation for the safest route.'),
+  ).describe('Rutas seguras recomendadas con evaluaciones de riesgo.'),
+  overallRecommendation: z.string().describe('Una recomendación general para la ruta más segura.'),
 });
 
 export type RecommendSafeRoutesOutput = z.infer<typeof RecommendSafeRoutesOutputSchema>;
@@ -46,21 +46,21 @@ const prompt = ai.definePrompt({
   name: 'recommendSafeRoutesPrompt',
   input: {schema: RecommendSafeRoutesInputSchema},
   output: {schema: RecommendSafeRoutesOutputSchema},
-  prompt: `You are an AI assistant designed to recommend safe routes for users based on their specified start and end locations, mode of transportation, and any available incident data.
+  prompt: `Eres un asistente de IA diseñado para recomendar rutas seguras para los usuarios en función de sus ubicaciones de inicio y finalización especificadas, el modo de transporte y cualquier dato de incidente disponible.
 
-  Given the following information, provide a list of safe routes with risk assessments and an overall recommendation:
+  Dada la siguiente información, proporciona una lista de rutas seguras con evaluaciones de riesgo y una recomendación general:
 
-  Start Location: {{{startLocation}}}
-  End Location: {{{endLocation}}}
-  Mode of Transportation: {{{transportMode}}}
+  Ubicación de Inicio: {{{startLocation}}}
+  Ubicación de Finalización: {{{endLocation}}}
+  Modo de Transporte: {{{transportMode}}}
 
   {{#if incidentData}}
-  Incident Data: {{{incidentData}}}
+  Datos de Incidentes: {{{incidentData}}}
   {{else}}
-  No incident data available.
+  No hay datos de incidentes disponibles.
   {{/if}}
 
-  Format your output as a JSON object with 'safeRoutes' (an array of routes with descriptions and risk assessments) and 'overallRecommendation'. Each route description includes turn-by-turn directions or public transport instructions, and each risk assessment explains the potential dangers and safety measures. The overall recommendation synthesizes this information into a single, clear directive.  
+  Formatea tu salida como un objeto JSON con 'safeRoutes' (una matriz de rutas con descripciones y evaluaciones de riesgo) y 'overallRecommendation'. Cada descripción de ruta incluye indicaciones paso a paso o instrucciones de transporte público, y cada evaluación de riesgo explica los peligros potenciales y las medidas de seguridad. La recomendación general sintetiza esta información en una directiva única y clara.  
   `,
 });
 

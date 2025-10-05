@@ -12,18 +12,18 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const AnalyzeCitizenReportInputSchema = z.object({
-  reportText: z.string().describe('The text content of the citizen report.'),
-  reportAudioDataUri: z.string().optional().describe('The audio content of the citizen report, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'),
-  reportImageDataUri: z.string().optional().describe('The image content of the citizen report, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'),
-  reportVideoDataUri: z.string().optional().describe('The video content of the citizen report, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'),
-  reportLocation: z.string().optional().describe('The GPS location or address of the incident.'),
+  reportText: z.string().describe('El contenido de texto del informe del ciudadano.'),
+  reportAudioDataUri: z.string().optional().describe('El contenido de audio del informe del ciudadano, como un URI de datos que debe incluir un tipo MIME y usar codificación Base64. Formato esperado: \'data:<mimetype>;base64,<encoded_data>\'.'),
+  reportImageDataUri: z.string().optional().describe('El contenido de imagen del informe del ciudadano, como un URI de datos que debe incluir un tipo MIME y usar codificación Base64. Formato esperado: \'data:<mimetype>;base64,<encoded_data>\'.'),
+  reportVideoDataUri: z.string().optional().describe('El contenido de video del informe del ciudadano, como un URI de datos que debe incluir un tipo MIME y usar codificación Base64. Formato esperado: \'data:<mimetype>;base64,<encoded_data>\'.'),
+  reportLocation: z.string().optional().describe('La ubicación GPS o dirección del incidente.'),
 });
 export type AnalyzeCitizenReportInput = z.infer<typeof AnalyzeCitizenReportInputSchema>;
 
 const AnalyzeCitizenReportOutputSchema = z.object({
-  incidentType: z.string().describe('The classified type of incident (e.g., robbery, vandalism, noise, accident).'),
-  riskLevel: z.enum(['low', 'medium', 'high']).describe('The assessed risk level of the incident.'),
-  summary: z.string().describe('A brief summary of the incident.'),
+  incidentType: z.string().describe('El tipo de incidente clasificado (p. ej., robo, vandalismo, ruido, accidente).'),
+  riskLevel: z.enum(['low', 'medium', 'high']).describe('El nivel de riesgo evaluado del incidente.'),
+  summary: z.string().describe('Un breve resumen del incidente.'),
 });
 export type AnalyzeCitizenReportOutput = z.infer<typeof AnalyzeCitizenReportOutputSchema>;
 
@@ -35,19 +35,19 @@ const prompt = ai.definePrompt({
   name: 'analyzeCitizenReportPrompt',
   input: {schema: AnalyzeCitizenReportInputSchema},
   output: {schema: AnalyzeCitizenReportOutputSchema},
-  prompt: `You are SafeCity Agent, an intelligent community assistant designed to enhance neighborhood safety by detecting, alerting, and preventing criminal incidents.
-  Analyze the citizen report below to classify the incident type and risk level.
+  prompt: `Eres el Agente SafeCity, un asistente comunitario inteligente diseñado para mejorar la seguridad del vecindario al detectar, alertar y prevenir incidentes criminales.
+  Analiza el informe ciudadano a continuación para clasificar el tipo de incidente y el nivel de riesgo.
 
-  Report Text: {{{reportText}}}
-  {{#if reportAudioDataUri}}Report Audio: {{media url=reportAudioDataUri}}{{/if}}
-  {{#if reportImageDataUri}}Report Image: {{media url=reportImageDataUri}}{{/if}}
-  {{#if reportVideoDataUri}}Report Video: {{media url=reportVideoDataUri}}{{/if}}
-  {{#if reportLocation}}Report Location: {{{reportLocation}}}{{/if}}
+  Texto del Informe: {{{reportText}}}
+  {{#if reportAudioDataUri}}Audio del Informe: {{media url=reportAudioDataUri}}{{/if}}
+  {{#if reportImageDataUri}}Imagen del Informe: {{media url=reportImageDataUri}}{{/if}}
+  {{#if reportVideoDataUri}}Video del Informe: {{media url=reportVideoDataUri}}{{/if}}
+  {{#if reportLocation}}Ubicación del Informe: {{{reportLocation}}}{{/if}}
 
-  Classify the incident type and risk level (low, medium, or high).
-  Provide a brief summary of the incident.
-  Remember to keep the summary anonymized of any sensitive information like names, addresses, or personal numbers.
-  Output in JSON format:
+  Clasifica el tipo de incidente y el nivel de riesgo (bajo, medio o alto).
+  Proporciona un breve resumen del incidente.
+  Recuerda mantener el resumen anonimizado de cualquier información sensible como nombres, direcciones o números personales.
+  Salida en formato JSON:
   {
     "incidentType": "",
     "riskLevel": "",

@@ -13,17 +13,17 @@ import {z} from 'genkit';
 const IssueRealTimeAlertsInputSchema = z.object({
   incidentType: z
     .string()
-    .describe("The type of incident (e.g., robbery, vandalism, noise, accident)."),
-  location: z.string().describe('The location of the incident.'),
-  time: z.string().describe('The time of the incident.'),
-  riskLevel: z.enum(['low', 'medium', 'high']).describe('The risk level of the incident.'),
-  reportDetails: z.string().describe('Details of the incident report.'),
+    .describe("El tipo de incidente (p. ej., robo, vandalismo, ruido, accidente)."),
+  location: z.string().describe('La ubicación del incidente.'),
+  time: z.string().describe('La hora del incidente.'),
+  riskLevel: z.enum(['low', 'medium', 'high']).describe('El nivel de riesgo del incidente.'),
+  reportDetails: z.string().describe('Detalles del informe del incidente.'),
 });
 export type IssueRealTimeAlertsInput = z.infer<typeof IssueRealTimeAlertsInputSchema>;
 
 const IssueRealTimeAlertsOutputSchema = z.object({
-  shouldAlert: z.boolean().describe('Whether a real-time alert should be issued.'),
-  alertMessage: z.string().optional().describe('The message to send in the alert, if any.'),
+  shouldAlert: z.boolean().describe('Si se debe emitir una alerta en tiempo real.'),
+  alertMessage: z.string().optional().describe('El mensaje para enviar en la alerta, si corresponde.'),
 });
 export type IssueRealTimeAlertsOutput = z.infer<typeof IssueRealTimeAlertsOutputSchema>;
 
@@ -35,23 +35,23 @@ const issueRealTimeAlertsPrompt = ai.definePrompt({
   name: 'issueRealTimeAlertsPrompt',
   input: {schema: IssueRealTimeAlertsInputSchema},
   output: {schema: IssueRealTimeAlertsOutputSchema},
-  prompt: `You are a safety expert analyzing incident reports to determine if a real-time alert should be issued to community members.
+  prompt: `Eres un experto en seguridad que analiza informes de incidentes para determinar si se debe emitir una alerta en tiempo real a los miembros de la comunidad.
 
-  Analyze the following incident report and determine if an alert should be issued based on the risk level, incident type, and location. Only issue alerts for medium and high risk incidents, except in special circumstances (e.g. repeated low risk incidents in the same location).
+  Analiza el siguiente informe de incidente y determina si se debe emitir una alerta según el nivel de riesgo, el tipo de incidente y la ubicación. Solo emite alertas para incidentes de riesgo medio y alto, excepto en circunstancias especiales (p. ej., incidentes repetidos de bajo riesgo en la misma ubicación).
 
-  Incident Type: {{{incidentType}}}
-  Location: {{{location}}}
-  Time: {{{time}}}
-  Risk Level: {{{riskLevel}}}
-  Report Details: {{{reportDetails}}}
+  Tipo de Incidente: {{{incidentType}}}
+  Ubicación: {{{location}}}
+  Hora: {{{time}}}
+  Nivel de Riesgo: {{{riskLevel}}}
+  Detalles del Reporte: {{{reportDetails}}}
 
-  Consider the following:
-  - Issue an alert if the risk level is high.
-  - Issue an alert if the risk level is medium and the incident type is severe (e.g., robbery, assault).
-  - Issue an alert if there have been multiple similar incidents in the same location recently, even if the risk level is low.
-  - If the incident is minor (e.g., noise complaint, minor vandalism) and the risk level is low, do not issue an alert.
+  Considera lo siguiente:
+  - Emite una alerta si el nivel de riesgo es alto.
+  - Emite una alerta si el nivel de riesgo es medio y el tipo de incidente es grave (p. ej., robo, asalto).
+  - Emite una alerta si ha habido múltiples incidentes similares en la misma ubicación recientemente, incluso si el nivel de riesgo es bajo.
+  - Si el incidente es menor (p. ej., queja por ruido, vandalismo menor) y el nivel de riesgo es bajo, no emitas una alerta.
 
-  If an alert should be issued, provide a concise and informative alert message that includes the incident type, location, and any necessary precautions. The alert message should be no more than 2 sentences.
+  Si se debe emitir una alerta, proporciona un mensaje de alerta conciso e informativo que incluya el tipo de incidente, la ubicación y las precauciones necesarias. El mensaje de alerta no debe tener más de 2 oraciones.
   `,
 });
 

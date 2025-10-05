@@ -17,7 +17,7 @@ import { revalidatePath } from 'next/cache';
 const reportSchema = z.object({
   reportText: z
     .string()
-    .min(10, { message: 'Report must be at least 10 characters.' }),
+    .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
 });
 
 type ReportState = {
@@ -40,7 +40,7 @@ export async function analyzeReportAction(
   if (!validatedFields.success) {
     return {
       status: 'error',
-      message: 'Invalid form data.',
+      message: 'Datos de formulario inválidos.',
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
@@ -50,16 +50,16 @@ export async function analyzeReportAction(
       reportText: validatedFields.data.reportText,
     });
     revalidatePath('/report');
-    return { status: 'success', message: 'Report analyzed successfully!', data: result };
+    return { status: 'success', message: '¡Reporte analizado con éxito!', data: result };
   } catch (error) {
-    return { status: 'error', message: 'AI analysis failed. Please try again.' };
+    return { status: 'error', message: 'El análisis de IA falló. Por favor, inténtalo de nuevo.' };
   }
 }
 
 // Safe Routes Action
 const routeSchema = z.object({
-  startLocation: z.string().min(3, { message: 'Start location is required.' }),
-  endLocation: z.string().min(3, { message: 'End location is required.' }),
+  startLocation: z.string().min(3, { message: 'Se requiere la ubicación de inicio.' }),
+  endLocation: z.string().min(3, { message: 'Se requiere la ubicación final.' }),
   transportMode: z.enum(['pedestrian', 'public_transport']),
 });
 
@@ -87,18 +87,18 @@ export async function planSafeRoutesAction(
   if (!validatedFields.success) {
     return {
       status: 'error',
-      message: 'Invalid form data.',
+      message: 'Datos de formulario inválidos.',
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
 
   try {
     // In a real app, you might pass real incident data.
-    const result = await recommendSafeRoutes({ ...validatedFields.data, incidentData: "Recent reports of theft around Downtown Mall and vandalism in Oak Street Park." });
+    const result = await recommendSafeRoutes({ ...validatedFields.data, incidentData: "Informes recientes de robos cerca del Centro Comercial del Centro y vandalismo en el Parque Oak Street." });
     revalidatePath('/routes');
-    return { status: 'success', message: 'Safe routes planned!', data: result };
+    return { status: 'success', message: '¡Rutas seguras planeadas!', data: result };
   } catch (error) {
-    return { status: 'error', message: 'AI route planning failed. Please try again.' };
+    return { status: 'error', message: 'La planificación de rutas de IA falló. Por favor, inténtalo de nuevo.' };
   }
 }
 

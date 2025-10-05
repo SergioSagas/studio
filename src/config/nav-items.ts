@@ -15,9 +15,9 @@ export type NavItem = {
 };
 
 export const navItems: NavItem[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { href: '/report', label: 'New Report', icon: PlusCircle, exact: false },
-  { href: '/routes', label: 'Safe Routes', icon: Route, exact: false },
-  { href: '/patterns', label: 'Crime Patterns', icon: BarChart3, exact: false },
-  { href: '/alerts', label: 'Alerts', icon: Siren, exact: false },
+  { href: '/', label: 'Panel', icon: LayoutDashboard, exact: true },
+  { href: '/report', label: 'Nuevo Reporte', icon: PlusCircle, exact: false },
+  { href: '/routes', label: 'Rutas Seguras', icon: Route, exact: false },
+  { href: '/patterns', label: 'Patrones', icon: BarChart3, exact: false },
+  { href: '/alerts', label: 'Alertas', icon: Siren, exact: false },
 ];

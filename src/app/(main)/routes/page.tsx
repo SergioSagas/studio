@@ -5,8 +5,8 @@ export default function SafeRoutesPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Safe Route Recommendations"
-        description="Plan your journey with AI-powered safety analysis."
+        title="Recomendaciones de Rutas Seguras"
+        description="Planifica tu viaje con análisis de seguridad impulsado por IA."
       />
       <RoutesForm />
     </div>

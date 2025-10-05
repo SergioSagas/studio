@@ -21,11 +21,11 @@ type ChartData = {
 } & { [key: string]: number | string };
 
 const chartConfig = {
-  vandalism: { label: 'Vandalism', color: 'hsl(var(--chart-1))' },
-  theft: { label: 'Theft', color: 'hsl(var(--chart-2))' },
-  robbery: { label: 'Robbery', color: 'hsl(var(--chart-3))' },
-  suspicious_activity: { label: 'Suspicious Activity', color: 'hsl(var(--chart-4))' },
-  other: { label: 'Other', color: 'hsl(var(--chart-5))' },
+  vandalism: { label: 'Vandalismo', color: 'hsl(var(--chart-1))' },
+  theft: { label: 'Robo', color: 'hsl(var(--chart-2))' },
+  robbery: { label: 'Asalto', color: 'hsl(var(--chart-3))' },
+  suspicious_activity: { label: 'Actividad Sospechosa', color: 'hsl(var(--chart-4))' },
+  other: { label: 'Otro', color: 'hsl(var(--chart-5))' },
 } satisfies ChartConfig;
 
 
@@ -53,9 +53,9 @@ export function CrimePatternsChart({ patterns }: { patterns: DetectCrimePatterns
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Crime Patterns by Zone</CardTitle>
+        <CardTitle>Patrones de Delincuencia por Zona</CardTitle>
         <CardDescription>
-          Frequency of different incident types across various zones.
+          Frecuencia de diferentes tipos de incidentes en varias zonas.
         </CardDescription>
       </CardHeader>
       <CardContent>

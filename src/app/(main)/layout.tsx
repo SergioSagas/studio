@@ -32,7 +32,7 @@ export default function MainLayout({
           <div className="flex items-center gap-2">
             <Logo className="size-7 text-primary" />
             <span className="font-headline text-xl font-semibold">
-              SafeCity
+              CiudadSegura
             </span>
           </div>
         </SidebarHeader>

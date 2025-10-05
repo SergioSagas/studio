@@ -21,7 +21,7 @@ function SubmitButton() {
       ) : (
         <Route className="mr-2 h-4 w-4" />
       )}
-      Find Safe Routes
+      Encontrar Rutas Seguras
     </Button>
   );
 }
@@ -35,12 +35,12 @@ export function RoutesForm() {
   useEffect(() => {
     if (state.status === 'success') {
       toast({
-        title: 'Route Plan Ready',
+        title: 'Plan de Ruta Listo',
         description: state.message,
       });
     } else if (state.status === 'error') {
       toast({
-        title: 'Planning Failed',
+        title: 'Planificación Fallida',
         description: state.message,
         variant: 'destructive',
       });
@@ -51,20 +51,19 @@ export function RoutesForm() {
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Plan Your Journey</CardTitle>
+          <CardTitle>Planifica Tu Viaje</CardTitle>
           <CardDescription>
-            Enter your start and end points to get AI-powered safe route
-            recommendations.
+            Introduce tus puntos de inicio y fin para obtener recomendaciones de rutas seguras impulsadas por IA.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="startLocation">Start Location</Label>
+              <Label htmlFor="startLocation">Ubicación de Inicio</Label>
               <Input
                 id="startLocation"
                 name="startLocation"
-                placeholder="e.g., City Hall"
+                placeholder="ej., Ayuntamiento"
                 required
               />
               {state.errors?.startLocation && (
@@ -74,11 +73,11 @@ export function RoutesForm() {
               )}
             </div>
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="endLocation">End Location</Label>
+              <Label htmlFor="endLocation">Ubicación Final</Label>
               <Input
                 id="endLocation"
                 name="endLocation"
-                placeholder="e.g., Central Library"
+                placeholder="ej., Biblioteca Central"
                 required
               />
               {state.errors?.endLocation && (
@@ -88,7 +87,7 @@ export function RoutesForm() {
               )}
             </div>
             <div>
-              <Label>Transport Mode</Label>
+              <Label>Modo de Transporte</Label>
               <RadioGroup
                 name="transportMode"
                 defaultValue="pedestrian"
@@ -100,7 +99,7 @@ export function RoutesForm() {
                     htmlFor="pedestrian"
                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Pedestrian
+                    Peatón
                   </Label>
                 </div>
                 <div>
@@ -113,7 +112,7 @@ export function RoutesForm() {
                     htmlFor="public_transport"
                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Public Transport
+                    Transporte Público
                   </Label>
                 </div>
               </RadioGroup>
@@ -128,9 +127,9 @@ export function RoutesForm() {
         ) : (
           <Card className="flex min-h-[400px] flex-col items-center justify-center text-center">
              <CardHeader>
-                <CardTitle>Awaiting Route Plan</CardTitle>
+                <CardTitle>Esperando Plan de Ruta</CardTitle>
                 <CardDescription>
-                    Your AI-generated routes will appear here.
+                    Tus rutas generadas por IA aparecerán aquí.
                 </CardDescription>
             </CardHeader>
             <CardContent>

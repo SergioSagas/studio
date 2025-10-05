@@ -26,33 +26,34 @@ export function ReportAnalysis({
 }: {
   analysis: AnalyzeCitizenReportOutput;
 }) {
+  const riskLevelText = analysis.riskLevel === 'low' ? 'Bajo' : analysis.riskLevel === 'medium' ? 'Medio' : 'Alto';
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle>AI Analysis Result</CardTitle>
+        <CardTitle>Resultado del Análisis de IA</CardTitle>
         <CardDescription>
-          Our AI has analyzed the report and classified it as follows.
+          Nuestra IA ha analizado el informe y lo ha clasificado de la siguiente manera.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between rounded-lg border p-4">
-          <span className="text-sm font-medium">Incident Type</span>
+          <span className="text-sm font-medium">Tipo de Incidente</span>
           <Badge variant="outline">{analysis.incidentType}</Badge>
         </div>
         <div className="flex items-center justify-between rounded-lg border p-4">
-          <span className="text-sm font-medium">Assessed Risk Level</span>
+          <span className="text-sm font-medium">Nivel de Riesgo Evaluado</span>
           <div className="flex items-center gap-2">
             {getRiskIcon(analysis.riskLevel)}
             <Badge
               variant={getRiskBadgeVariant(analysis.riskLevel)}
               className="capitalize"
             >
-              {analysis.riskLevel}
+              {riskLevelText}
             </Badge>
           </div>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-medium">Anonymized Summary</h4>
+          <h4 className="mb-2 text-sm font-medium">Resumen Anonimizado</h4>
           <p className="text-sm text-muted-foreground">{analysis.summary}</p>
         </div>
       </CardContent>

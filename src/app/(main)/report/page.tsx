@@ -5,8 +5,8 @@ export default function NewReportPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Submit a New Report"
-        description="Help improve community safety by reporting incidents anonymously."
+        title="Enviar un Nuevo Reporte"
+        description="Ayude a mejorar la seguridad de la comunidad reportando incidentes de forma anónima."
       />
       <ReportForm />
     </div>

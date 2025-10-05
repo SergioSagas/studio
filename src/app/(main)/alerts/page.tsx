@@ -30,6 +30,7 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
 }
 
 function AlertCard({ report }: { report: IncidentReport }) {
+  const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
   return (
     <Card>
       <CardHeader>
@@ -47,7 +48,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
           >
              <div className="flex items-center gap-2">
                 {getRiskIcon(report.riskLevel)}
-                <span>{report.riskLevel} Risk</span>
+                <span>{riskLevelText} Riesgo</span>
              </div>
           </Badge>
         </div>
@@ -70,8 +71,8 @@ export default function AlertsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Real-time Alerts"
-        description="A live feed of incidents and safety alerts in your community."
+        title="Alertas en Tiempo Real"
+        description="Un feed en vivo de incidentes y alertas de seguridad en tu comunidad."
       />
       <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {sortedReports.map((report) => (

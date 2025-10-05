@@ -75,60 +75,60 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Welcome to SafeCity Guardian"
-        description="Your unified platform for community safety and incident reporting."
+        title="Bienvenido a Guardián CiudadSegura"
+        description="Su plataforma unificada para la seguridad comunitaria y el reporte de incidentes."
       >
         <Button asChild>
           <Link href="/report">
             <ShieldCheck className="mr-2 h-4 w-4" />
-            Submit a Report
+            Enviar un Reporte
           </Link>
         </Button>
       </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Active Alerts"
+          title="Alertas Activas"
           value={activeAlerts.toString()}
           icon={Siren}
-          description="Medium and high-risk incidents"
+          description="Incidentes de riesgo medio y alto"
         />
         <StatCard
-          title="Reports Today"
+          title="Reportes de Hoy"
           value={reportsToday.toString()}
           icon={Users}
-          description="Total reports filed in last 24h"
+          description="Reportes totales en las últimas 24h"
         />
         <StatCard
-          title="High-Risk Zones"
+          title="Zonas de Alto Riesgo"
           value="2"
           icon={AlertTriangle}
-          description="Oak St Park & Downtown Mall"
+          description="Parque Oak St y Centro Comercial"
         />
         <StatCard
-          title="Resolution Rate"
+          title="Tasa de Resolución"
           value="78%"
           icon={ShieldCheck}
-          description="Reported incidents addressed"
+          description="Incidentes reportados atendidos"
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent High-Priority Incidents</CardTitle>
+          <CardTitle>Incidentes Recientes de Alta Prioridad</CardTitle>
           <CardDescription>
-            A summary of the most critical reports.
+            Un resumen de los reportes más críticos.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Incident</TableHead>
-                <TableHead>Risk</TableHead>
-                <TableHead className="hidden md:table-cell">Location</TableHead>
-                <TableHead className="hidden md:table-cell">Time</TableHead>
-                <TableHead className="text-right">Summary</TableHead>
+                <TableHead>Incidente</TableHead>
+                <TableHead>Riesgo</TableHead>
+                <TableHead className="hidden md:table-cell">Ubicación</TableHead>
+                <TableHead className="hidden md:table-cell">Hora</TableHead>
+                <TableHead className="text-right">Resumen</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -142,7 +142,7 @@ export default function DashboardPage() {
                       variant={getRiskBadgeVariant(report.riskLevel)}
                       className="capitalize"
                     >
-                      {report.riskLevel}
+                      {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
