@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -5,6 +7,8 @@ import {
   ShieldCheck,
   Siren,
   Users,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { incidentReports, type IncidentReport } from '@/lib/data';
 import { cn } from '@/lib/utils';
@@ -26,6 +30,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -59,18 +66,39 @@ function StatCard({
 }
 
 export default function DashboardPage() {
-  const highPriorityIncidents = incidentReports
+  const { role } = useUserRole();
+  const { toast } = useToast();
+  const [reports, setReports] = useState<IncidentReport[]>(incidentReports);
+
+  const highPriorityIncidents = reports
     .filter((report) => report.riskLevel === 'high')
     .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
     .slice(0, 5);
 
-  const activeAlerts = incidentReports.filter(
+  const activeAlerts = reports.filter(
     (r) => r.riskLevel === 'high' || r.riskLevel === 'medium'
   ).length;
-  const reportsToday = incidentReports.filter(
+  const reportsToday = reports.filter(
     (r) =>
       new Date(r.time).toDateString() === new Date().toDateString()
   ).length;
+
+  const handleDelete = (id: string) => {
+    // In a real app, this would be a non-blocking update to Firestore
+    setReports(reports.filter(report => report.id !== id));
+    toast({
+      title: "Incidente eliminado",
+      description: "El reporte de incidente ha sido eliminado.",
+    });
+  }
+
+  const handleEdit = (id: string) => {
+    // In a real app, this would open a modal or navigate to an edit page
+    toast({
+      title: "Función no implementada",
+      description: "La edición de incidentes aún no está disponible.",
+    });
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -128,7 +156,8 @@ export default function DashboardPage() {
                 <TableHead>Riesgo</TableHead>
                 <TableHead className="hidden md:table-cell">Ubicación</TableHead>
                 <TableHead className="hidden md:table-cell">Hora</TableHead>
-                <TableHead className="text-right">Resumen</TableHead>
+                <TableHead>Resumen</TableHead>
+                 {role === 'admin' && <TableHead className="text-right">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -151,9 +180,21 @@ export default function DashboardPage() {
                   <TableCell className="hidden md:table-cell">
                     {new Date(report.time).toLocaleString()}
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground truncate max-w-xs">
+                  <TableCell className="text-muted-foreground truncate max-w-xs">
                     {report.summary}
                   </TableCell>
+                   {role === 'admin' && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(report.id)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
