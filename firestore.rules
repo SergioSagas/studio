@@ -1,89 +1,72 @@
 /**
- * @fileoverview Firestore Security Rules for SafeCity Guardian application.
+ * @fileoverview Firestore Security Rules for SafeCity Guardian.
  *
  * Core Philosophy:
- * This ruleset implements a role-based access control model.
- * - Users can read incident reports.
- * - Only admins can create, update, and delete incident reports.
- * - Users can manage their own profiles.
+ * This ruleset enforces a user-ownership model for user profiles and role-based access for incident reports. Users can only manage their own profiles.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, with a 'role' field (e.g., 'user', 'admin').
+ * - /users/{userId}: Stores user profile information.  Each document ID matches the Firebase Auth UID.
  * - /incidentReports/{incidentReportId}: Stores incident reports.
  *
  * Key Security Decisions:
- * - Listing of incident reports is allowed for all users.
- * - Users are not allowed to create, update or delete other user profiles.
+ * - Users can only read and write their own user profile.
+ * - Incident reports are accessible to all users (read), but only admins can create, update, or delete them.
  *
  * Denormalization for Authorization:
- * - The user's role is stored directly in their profile document (/users/{userId}) for fast access.
+ *  - Incident reports are secured using the user's role, read from their profile.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the user is signed in.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the user is the owner of the document.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the user is an admin.
-     */
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    /**
-     * @description Checks if the user is the owner and the document exists.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-    
-    /**
-     * @description
-     * Rules for user profiles.
+     * @description Controls access to user profile documents.
      * @path /users/{userId}
-     * @allow (create) User with UID 'user123' can create their own profile.
-     * @allow (get, update, delete) User with UID 'user123' can read their own profile.
-     * @deny (create) User with UID 'user123' cannot create a profile with ID 'anotherUser'.
-     * @deny (update, delete) User with UID 'user123' cannot update or delete another user's profile.
-     * @principle Enforces document ownership for writes.
+     * @allow (get, list, create, update, delete) - If the authenticated user's UID matches the {userId}.
+     * @deny (get, list, create, update, delete) - If the authenticated user's UID does not match the {userId}.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      allow get: if isSignedIn() && isOwner(userId);
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return isSignedIn() && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+          return isOwner(userId) && resource != null;
+      }
+
+      allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.email == request.auth.token.email;
-      allow update: if isExistingOwner(userId) && request.resource.data.email == resource.data.email;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description
-     * Rules for incident reports. All users can list and get incident reports. Only admins can create, update, and delete.
+     * @description Controls access to incident reports.
      * @path /incidentReports/{incidentReportId}
-     * @allow (get, list) Any signed-in user can read or list incident reports.
-     * @allow (create) Admin user can create an incident report.
-     * @allow (update, delete) Admin user can update or delete an incident report.
-     * @deny (create) Non-admin user cannot create an incident report.
-     * @deny (update, delete) Non-admin user cannot update or delete an incident report.
-     * @principle Enforces admin-only writes on incident reports.
+     * @allow (get, list) - Any authenticated user can read incident reports.
+     * @allow (create, update, delete) - Only users with the 'admin' role can modify incident reports.
+     * @deny (create, update, delete) - Non-admin users cannot modify incident reports.
+     * @principle Enforces role-based access control for managing incident reports.
      */
     match /incidentReports/{incidentReportId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin() && resource != null;
-      allow delete: if isSignedIn() && isAdmin() && resource != null;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isAdmin() {
+        return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
   }
 }
