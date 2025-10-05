@@ -7,7 +7,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useAuth } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,6 +40,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const auth = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
 
   const {
@@ -59,7 +61,21 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginInput) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        data.email,
+        data.password
+      );
+      const user = userCredential.user;
+
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists() || userDoc.data().role !== data.role) {
+        await auth.signOut(); // Desloguear si el rol no es correcto
+        throw new Error('Rol no válido para este usuario.');
+      }
+
       toast({
         title: 'Inicio de sesión exitoso',
         description: 'Bienvenido de nuevo.',
@@ -67,11 +83,16 @@ export default function LoginPage() {
       router.push('/');
     } catch (error: any) {
       console.error('Login error:', error);
+      let description =
+        'Las credenciales son incorrectas. Por favor, inténtalo de nuevo.';
+      if (error.message === 'Rol no válido para este usuario.') {
+        description =
+          'No tienes permiso para iniciar sesión con el rol seleccionado.';
+      }
       toast({
         variant: 'destructive',
         title: 'Error al iniciar sesión',
-        description:
-          'Las credenciales son incorrectas. Por favor, inténtalo de nuevo.',
+        description,
       });
     } finally {
       setLoading(false);
