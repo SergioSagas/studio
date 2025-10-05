@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useActionState, useRef } from 'react';
-import { useFormStatus } from 'react-dom';
 import { analyzeReportAction } from '@/app/actions';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import { useToast } from '@/hooks/use-toast';
@@ -17,10 +16,10 @@ import { useAuth } from '@/firebase';
 import { Input } from '@/components/ui/input';
 
 function SubmitButton() {
-  const { pending } = useFormStatus();
+  const { isPending } = useActionState(analyzeReportAction, { status: 'idle' });
   return (
-    <Button type="submit" disabled={pending} className="w-full">
-      {pending ? (
+    <Button type="submit" disabled={isPending} className="w-full">
+      {isPending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
         <Send className="mr-2 h-4 w-4" />
