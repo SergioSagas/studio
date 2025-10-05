@@ -17,9 +17,24 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
 
 import { auth } from 'firebase-admin';
-import { getApp } from 'firebase-admin/app';
-import { headers } from 'next/headers';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 
+// Initialize Firebase Admin SDK
+if (getApps().length === 0) {
+  try {
+    // This works in App Hosting
+    initializeApp();
+  } catch (e) {
+    // For local dev, use service account credentials
+    if (process.env.SERVICE_ACCOUNT_KEY) {
+      initializeApp({
+        credential: cert(JSON.parse(process.env.SERVICE_ACCOUNT_KEY)),
+      });
+    } else {
+        console.warn("Firebase Admin SDK initialization failed. SERVICE_ACCOUNT_KEY is not set.");
+    }
+  }
+}
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -27,6 +42,7 @@ const reportSchema = z.object({
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
   location: z.string().min(1, { message: 'La ubicación es requerida.' }),
+  idToken: z.string().min(1, { message: 'Token de autenticación requerido.' }),
 });
 
 type ReportState = {
@@ -39,17 +55,12 @@ type ReportState = {
   };
 };
 
-async function getUserIdFromSessionCookie() {
+async function getUserIdFromIdToken(idToken: string) {
   try {
-    const sessionCookie = headers().get('__session');
-    if (!sessionCookie) return null;
-
-    // This requires firebase-admin to be initialized, which happens automatically
-    // in the Next.js environment on App Hosting.
-    const decodedToken = await auth().verifySessionCookie(sessionCookie, true);
+    const decodedToken = await auth().verifyIdToken(idToken);
     return decodedToken.uid;
   } catch (e) {
-    console.error('Error verifying session cookie:', e);
+    console.error('Error verifying ID token:', e);
     return null;
   }
 }
@@ -58,18 +69,18 @@ export async function analyzeReportAction(
   prevState: ReportState,
   formData: FormData
 ): Promise<ReportState> {
-
-  const userId = await getUserIdFromSessionCookie();
-  if (!userId) {
-    return { status: 'error', message: 'Usuario no autenticado. Por favor, inicie sesión.' };
-  }
     
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     location: formData.get('location'),
+    idToken: formData.get('idToken'),
   });
 
   if (!validatedFields.success) {
+    // This is a developer error if token is missing, but we handle it gracefully
+     if (validatedFields.error.flatten().fieldErrors.idToken) {
+       return { status: 'error', message: 'Usuario no autenticado. Por favor, inicie sesión.' };
+     }
     return {
       status: 'error',
       message: 'Datos de formulario inválidos.',
@@ -77,13 +88,19 @@ export async function analyzeReportAction(
     };
   }
   
-  const { reportText, location } = validatedFields.data;
+  const { reportText, location, idToken } = validatedFields.data;
+
+  const userId = await getUserIdFromIdToken(idToken);
+  if (!userId) {
+    return { status: 'error', message: 'La sesión ha expirado. Por favor, inicie sesión de nuevo.' };
+  }
 
   let analysisResult: AnalyzeCitizenReportOutput;
 
   try {
     analysisResult = await analyzeCitizenReport({
       reportText: reportText,
+      reportLocation: location,
     });
   } catch (error) {
     console.warn("AI analysis failed. Proceeding with pending state.", error);

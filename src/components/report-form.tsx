@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useActionState } from 'react';
+import { useEffect, useActionState, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { analyzeReportAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -12,6 +12,7 @@ import { ReportAnalysis } from '@/components/report-analysis';
 import { Loader2, Send } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
+import { useAuth } from '@/firebase';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -29,6 +30,8 @@ function SubmitButton() {
 
 export function ReportForm() {
   const { toast } = useToast();
+  const auth = useAuth();
+  const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
@@ -40,7 +43,7 @@ export function ReportForm() {
         title: 'Reporte Enviado',
         description: state.message,
       });
-      // Consider resetting the form here if needed
+      formRef.current?.reset();
     } else if (state.status === 'error') {
       toast({
         title: 'Error en el Reporte',
@@ -49,6 +52,32 @@ export function ReportForm() {
       });
     }
   }, [state, isPending, toast]);
+
+  const handleFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    
+    if (auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        formData.append('idToken', token);
+        formAction(formData);
+      } catch (error) {
+        toast({
+          title: 'Error de Autenticación',
+          description: 'No se pudo verificar tu sesión. Por favor, intenta iniciar sesión de nuevo.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+       toast({
+        title: 'Usuario no autenticado',
+        description: 'Por favor, inicia sesión para enviar un reporte.',
+        variant: 'destructive',
+      });
+    }
+  };
+
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -60,7 +89,7 @@ export function ReportForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={formAction} className="space-y-4">
+          <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
@@ -97,7 +126,7 @@ export function ReportForm() {
                 </p>
               )}
             </div>
-
+            
             <SubmitButton />
           </form>
         </CardContent>
