@@ -13,11 +13,17 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
+import { collection, addDoc } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+import { auth } from 'firebase-admin';
+
 // Report Analysis Action
 const reportSchema = z.object({
   reportText: z
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
+  userId: z.string(),
 });
 
 type ReportState = {
@@ -35,6 +41,7 @@ export async function analyzeReportAction(
 ): Promise<ReportState> {
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
+    userId: formData.get('userId'),
   });
 
   if (!validatedFields.success) {
@@ -44,14 +51,37 @@ export async function analyzeReportAction(
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
+  
+  const { reportText, userId } = validatedFields.data;
 
   try {
     const result = await analyzeCitizenReport({
-      reportText: validatedFields.data.reportText,
+      reportText: reportText,
     });
-    revalidatePath('/report');
-    return { status: 'success', message: '¡Reporte analizado con éxito!', data: result };
+    
+    // This is a server component, we need to initialize a temporary admin app
+    // to write to firestore.
+    const { firestore } = initializeFirebase();
+    const incidentReportsRef = collection(firestore, "incidentReports");
+    
+    const newReport: Omit<IncidentReport, 'id'> = {
+      incidentType: result.incidentType,
+      riskLevel: result.riskLevel,
+      summary: result.summary,
+      description: reportText,
+      userId: userId,
+      location: "Ubicación Desconocida", // Placeholder location
+      reportTime: new Date().toISOString(),
+    };
+    
+    await addDoc(incidentReportsRef, newReport);
+
+    revalidatePath('/');
+    revalidatePath('/alerts');
+    
+    return { status: 'success', message: '¡Reporte analizado y guardado!', data: result };
   } catch (error) {
+    console.error("Error in analyzeReportAction: ", error);
     return { status: 'error', message: 'El análisis de IA falló. Por favor, inténtalo de nuevo.' };
   }
 }
@@ -103,13 +133,19 @@ export async function planSafeRoutesAction(
 }
 
 // Crime Patterns Action
-export async function fetchCrimePatternsAction(reports: IncidentReport[]): Promise<DetectCrimePatternsOutput | null> {
+export async function fetchCrimePatternsAction(reports: Omit<IncidentReport, 'id'>[]): Promise<DetectCrimePatternsOutput | null> {
     if (!reports || reports.length === 0) {
         return null;
     }
+    
+    const mappedReports = reports.map(r => ({
+      incidentType: r.incidentType,
+      location: r.location,
+      time: r.reportTime,
+    }));
 
     try {
-        const result = await detectCrimePatterns({ reports });
+        const result = await detectCrimePatterns({ reports: mappedReports });
         return result;
     } catch (error) {
         console.error("Failed to detect crime patterns:", error);

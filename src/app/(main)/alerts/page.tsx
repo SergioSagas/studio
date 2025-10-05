@@ -1,5 +1,6 @@
+'use client';
 import { PageHeader } from '@/components/page-header';
-import { incidentReports, type IncidentReport } from '@/lib/data';
+import { type IncidentReport } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -16,6 +17,9 @@ import {
   MapPin,
   Clock,
 } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
+import { Loader } from '@/components/ui/loader';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -58,27 +62,40 @@ function AlertCard({ report }: { report: IncidentReport }) {
       </CardContent>
       <CardFooter className="text-xs text-muted-foreground flex items-center gap-2">
         <Clock className="size-3.5" />
-        <span>{new Date(report.time).toLocaleString()}</span>
+        <span>{new Date(report.reportTime).toLocaleString()}</span>
       </CardFooter>
     </Card>
   );
 }
 
 export default function AlertsPage() {
-  const sortedReports = [...incidentReports].sort(
-    (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+  const firestore = useFirestore();
+
+  const reportsQuery = useMemoFirebase(
+    () =>
+      firestore
+        ? query(collection(firestore, 'incidentReports'), orderBy('reportTime', 'desc'))
+        : null,
+    [firestore]
   );
+  
+  const { data: reports, isLoading } = useCollection<Omit<IncidentReport, 'id'>>(reportsQuery);
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Alertas en Tiempo Real"
         description="Un feed en vivo de incidentes y alertas de seguridad en tu comunidad."
       />
-      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        {sortedReports.map((report) => (
-          <AlertCard key={report.id} report={report} />
-        ))}
-      </div>
+      {isLoading ? (
+        <Loader className="h-64" />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {reports?.map((report) => (
+            <AlertCard key={report.id} report={report} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

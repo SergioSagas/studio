@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ReportAnalysis } from '@/components/report-analysis';
 import { Loader2, Send } from 'lucide-react';
+import { useUser } from '@/firebase';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -20,13 +21,14 @@ function SubmitButton() {
       ) : (
         <Send className="mr-2 h-4 w-4" />
       )}
-      Analizar Reporte
+      Analizar y Enviar Reporte
     </Button>
   );
 }
 
 export function ReportForm() {
   const { toast } = useToast();
+  const { user } = useUser();
   const [state, formAction] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
@@ -57,6 +59,7 @@ export function ReportForm() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
+            <input type="hidden" name="userId" value={user?.uid ?? ''} />
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
