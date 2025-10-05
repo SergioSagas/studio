@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ReportAnalysis } from '@/components/report-analysis';
 import { Loader2, Send } from 'lucide-react';
 import { useUser } from '@/firebase';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { locations } from '@/lib/locations';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -60,12 +62,13 @@ export function ReportForm() {
         <CardContent>
           <form action={formAction} className="space-y-4">
             <input type="hidden" name="userId" value={user?.uid ?? ''} />
+            
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>
               <Textarea
                 id="reportText"
                 name="reportText"
-                placeholder="Describa la situación, ubicación y cualquier otro detalle relevante..."
+                placeholder="Describa la situación, personas involucradas y cualquier otro detalle relevante..."
                 className="min-h-[150px]"
                 required
               />
@@ -75,6 +78,28 @@ export function ReportForm() {
                 </p>
               )}
             </div>
+
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="location">Ubicación</Label>
+               <Select name="location" required>
+                <SelectTrigger id="location">
+                  <SelectValue placeholder="Selecciona una ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location} value={location}>
+                      {location}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+               {state.errors?.location && (
+                <p className="text-sm text-destructive">
+                  {state.errors.location[0]}
+                </p>
+              )}
+            </div>
+
             <SubmitButton />
           </form>
         </CardContent>

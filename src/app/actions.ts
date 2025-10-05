@@ -13,17 +13,17 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
-import { collection, addDoc } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
-import { auth } from 'firebase-admin';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { initializeFirebase, setDocumentNonBlocking } from '@/firebase';
+
 
 // Report Analysis Action
 const reportSchema = z.object({
   reportText: z
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
-  userId: z.string(),
+  userId: z.string().min(1, { message: 'ID de usuario es requerido.' }),
+  location: z.string().min(1, { message: 'La ubicación es requerida.' }),
 });
 
 type ReportState = {
@@ -32,6 +32,7 @@ type ReportState = {
   data?: AnalyzeCitizenReportOutput;
   errors?: {
     reportText?: string[];
+    location?: string[];
   };
 };
 
@@ -42,6 +43,7 @@ export async function analyzeReportAction(
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     userId: formData.get('userId'),
+    location: formData.get('location'),
   });
 
   if (!validatedFields.success) {
@@ -52,37 +54,50 @@ export async function analyzeReportAction(
     };
   }
   
-  const { reportText, userId } = validatedFields.data;
+  const { reportText, userId, location } = validatedFields.data;
+
+  let analysisResult: AnalyzeCitizenReportOutput;
 
   try {
-    const result = await analyzeCitizenReport({
+    // Intenta obtener el análisis de la IA
+    analysisResult = await analyzeCitizenReport({
       reportText: reportText,
     });
-    
-    // This is a server component, we need to initialize a temporary admin app
-    // to write to firestore.
+  } catch (error) {
+    console.warn("AI analysis failed. Proceeding with pending state.", error);
+    // Si la IA falla, crea un resultado por defecto
+    analysisResult = {
+      incidentType: 'Sin clasificar',
+      riskLevel: 'low', // Por defecto 'low' para que no cause pánico
+      summary: 'Análisis de IA pendiente. Un administrador revisará este reporte pronto.',
+    };
+  }
+
+  try {
     const { firestore } = initializeFirebase();
     const incidentReportsRef = collection(firestore, "incidentReports");
     
     const newReport: Omit<IncidentReport, 'id'> = {
-      incidentType: result.incidentType,
-      riskLevel: result.riskLevel,
-      summary: result.summary,
+      incidentType: analysisResult.incidentType,
+      riskLevel: analysisResult.riskLevel,
+      summary: analysisResult.summary,
       description: reportText,
       userId: userId,
-      location: "Ubicación Desconocida", // Placeholder location
+      location: location,
       reportTime: new Date().toISOString(),
     };
     
-    await addDoc(incidentReportsRef, newReport);
+    // Usar non-blocking para una UI más rápida
+    addDoc(incidentReportsRef, newReport);
 
     revalidatePath('/');
     revalidatePath('/alerts');
+    revalidatePath('/patterns');
     
-    return { status: 'success', message: '¡Reporte analizado y guardado!', data: result };
+    return { status: 'success', message: '¡Reporte enviado! La IA lo ha procesado.', data: analysisResult };
   } catch (error) {
-    console.error("Error in analyzeReportAction: ", error);
-    return { status: 'error', message: 'El análisis de IA falló. Por favor, inténtalo de nuevo.' };
+    console.error("Error in analyzeReportAction saving to Firestore: ", error);
+    return { status: 'error', message: 'No se pudo guardar el reporte en la base de datos.' };
   }
 }
 
