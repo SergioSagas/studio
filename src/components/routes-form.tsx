@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ function SubmitButton() {
 
 export function RoutesForm() {
   const { toast } = useToast();
-  const [state, formAction] = useFormState(planSafeRoutesAction, {
+  const [state, formAction] = useActionState(planSafeRoutesAction, {
     status: 'idle',
   });
 

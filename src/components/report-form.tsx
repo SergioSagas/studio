@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { analyzeReportAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ function SubmitButton() {
 
 export function ReportForm() {
   const { toast } = useToast();
-  const [state, formAction] = useFormState(analyzeReportAction, {
+  const [state, formAction] = useActionState(analyzeReportAction, {
     status: 'idle',
   });
 
