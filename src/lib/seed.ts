@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
@@ -14,11 +14,13 @@ async function seedAdminUser() {
   console.log('Starting to seed admin user...');
 
   try {
-    const app = initializeApp(firebaseConfig, 'firebase-seed');
+    const appName = 'firebase-seed';
+    const app = getApps().find(app => app.name === appName) || initializeApp(firebaseConfig, appName);
+    
     const auth = getAuth(app);
     const firestore = getFirestore(app);
 
-    const email = 'manuelserch@gmail.com';
+    const email = 'sergio@gmail.com';
     const password = 'hola123';
 
     try {
@@ -56,8 +58,12 @@ async function seedAdminUser() {
 seedAdminUser().then(() => {
     console.log('Seeding finished.');
     // We need to exit the process otherwise the postinstall will hang
-    process.exit(0);
+    if (typeof process !== 'undefined') {
+        process.exit(0);
+    }
 }).catch((e) => {
     console.error('Seeding failed:', e);
-    process.exit(1);
+    if (typeof process !== 'undefined') {
+        process.exit(1);
+    }
 });

@@ -60,6 +60,15 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginInput) => {
     setLoading(true);
+    if (!auth || !firestore) {
+        toast({
+            variant: 'destructive',
+            title: 'Error de configuración',
+            description: 'Los servicios de Firebase no están disponibles.',
+        });
+        setLoading(false);
+        return;
+    }
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
@@ -88,6 +97,8 @@ export default function LoginPage() {
       if (error.message === 'Rol no válido para este usuario.') {
         description =
           'No tienes permiso para iniciar sesión con el rol seleccionado.';
+      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        description = 'El correo electrónico o la contraseña son incorrectos.';
       }
       toast({
         variant: 'destructive',
