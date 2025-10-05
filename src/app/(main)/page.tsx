@@ -109,6 +109,28 @@ export default function DashboardPage() {
     (r) =>
       new Date(r.reportTime).toDateString() === new Date().toDateString()
   ).length ?? 0, [reports]);
+  
+  const highRiskZones = useMemo(() => {
+    if (!reports) return { count: 0, names: 'Calculando...' };
+
+    const riskCountsByLocation = reports
+      .filter(r => r.riskLevel === 'high' || r.riskLevel === 'medium')
+      .reduce((acc, report) => {
+        acc[report.location] = (acc[report.location] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+    const sortedZones = Object.entries(riskCountsByLocation)
+      .sort(([, a], [, b]) => b - a)
+      .map(([location]) => location);
+
+    const topZones = sortedZones.slice(0, 2);
+
+    return {
+      count: topZones.length,
+      names: topZones.length > 0 ? topZones.join(' y ') : 'No hay zonas de alto riesgo',
+    };
+  }, [reports]);
 
   const handleDelete = (id: string) => {
     if (!firestore) return;
@@ -159,9 +181,10 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Zonas de Alto Riesgo"
-          value="2"
+          value={highRiskZones.count.toString()}
           icon={AlertTriangle}
-          description="Parque Oak St y Centro Comercial"
+          description={highRiskZones.names}
+          isLoading={isLoadingReports}
         />
         <StatCard
           title="Tasa de Resolución"
