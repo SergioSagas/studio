@@ -33,7 +33,7 @@ import { PageHeader } from '@/components/page-header';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
@@ -110,23 +110,15 @@ export default function DashboardPage() {
       new Date(r.reportTime).toDateString() === new Date().toDateString()
   ).length ?? 0, [reports]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!firestore) return;
-    try {
-        const reportRef = doc(firestore, 'incidentReports', id);
-        await deleteDoc(reportRef);
-        toast({
-          title: "Incidente eliminado",
-          description: "El reporte de incidente ha sido eliminado.",
-        });
-    } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "Error al eliminar",
-            description: "No se pudo eliminar el incidente.",
-        });
-    }
-  }
+    const reportRef = doc(firestore, 'incidentReports', id);
+    deleteDocumentNonBlocking(reportRef);
+    toast({
+      title: "Incidente eliminado",
+      description: "El reporte de incidente ha sido eliminado.",
+    });
+  };
 
   const handleEdit = (id: string) => {
     // In a real app, this would open a modal or navigate to an edit page
