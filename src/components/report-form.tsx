@@ -12,7 +12,6 @@ import { ReportAnalysis } from '@/components/report-analysis';
 import { Loader2, Send } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
-import { useAuth } from '@/firebase';
 import { Input } from '@/components/ui/input';
 
 function SubmitButton() {
@@ -35,14 +34,12 @@ type ReportFormProps = {
     formData: {
       reportText: string;
       location: string;
-      userId: string;
     }
   ) => Promise<void>;
 };
 
 export function ReportForm({ onReportSubmit }: ReportFormProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = useActionState(analyzeReportAction, {
     status: 'idle',
@@ -55,21 +52,10 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
 
     if (state.status === 'success' && state.data) {
       const formData = new FormData(formRef.current!);
-      const userId = user?.uid;
-      
-      if (!userId) {
-        toast({
-          variant: "destructive",
-          title: "Error de autenticación",
-          description: "No se pudo obtener la identificación del usuario. Intente recargar la página."
-        });
-        return;
-      }
       
       onReportSubmit(state.data, {
         reportText: formData.get('reportText') as string,
         location: formData.get('location') as string,
-        userId: userId,
       });
       formRef.current?.reset();
       setLocationValue('');
@@ -80,7 +66,7 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         variant: 'destructive',
       });
     }
-  }, [state, isPending, toast, onReportSubmit, user]);
+  }, [state, isPending, toast, onReportSubmit]);
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -93,9 +79,6 @@ export function ReportForm({ onReportSubmit }: ReportFormProps) {
         </CardHeader>
         <CardContent>
           <form ref={formRef} action={formAction} className="space-y-4">
-            {user?.uid && (
-              <Input type="hidden" name="userId" value={user.uid} />
-            )}
             <Input type="hidden" name="location" value={locationValue} />
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="reportText">Detalles del Incidente</Label>

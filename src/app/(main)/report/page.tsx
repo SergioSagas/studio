@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/page-header';
 import { ReportForm } from '@/components/report-form';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { useFirestore, addDocumentNonBlocking, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import type { IncidentReport } from '@/lib/data';
@@ -11,13 +11,13 @@ import type { IncidentReport } from '@/lib/data';
 export default function NewReportPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { user } = useUser();
 
   const handleReportSubmit = async (
     analysisResult: AnalyzeCitizenReportOutput,
     formData: {
       reportText: string;
       location: string;
-      userId: string;
     }
   ) => {
     if (!firestore) {
@@ -29,12 +29,21 @@ export default function NewReportPage() {
       return;
     }
 
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de autenticación',
+        description: 'No se pudo obtener la identificación del usuario. Intente recargar la página.',
+      });
+      return;
+    }
+
     const newReport: Omit<IncidentReport, 'id'> = {
       incidentType: analysisResult.incidentType,
       riskLevel: analysisResult.riskLevel,
       summary: analysisResult.summary,
       description: formData.reportText,
-      userId: formData.userId,
+      userId: user.uid,
       location: formData.location,
       reportTime: new Date().toISOString(),
     };

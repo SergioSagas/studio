@@ -20,7 +20,6 @@ const reportSchema = z.object({
     .string()
     .min(10, { message: 'El reporte debe tener al menos 10 caracteres.' }),
   location: z.string().min(1, { message: 'La ubicación es requerida.' }),
-  userId: z.string().min(1, { message: 'Usuario no autenticado.' }),
 });
 
 type ReportState = {
@@ -30,7 +29,6 @@ type ReportState = {
   errors?: {
     reportText?: string[];
     location?: string[];
-    userId?: string[];
   };
 };
 
@@ -42,7 +40,6 @@ export async function analyzeReportAction(
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     location: formData.get('location'),
-    userId: formData.get('userId'),
   });
 
   if (!validatedFields.success) {
