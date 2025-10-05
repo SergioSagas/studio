@@ -12,6 +12,7 @@ import { detectCrimePatterns, type DetectCrimePatternsOutput } from '@/ai/flows/
 import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { cityLayout } from '@/lib/city-layout';
 
 
 // Report Analysis Action
@@ -36,6 +37,7 @@ export async function analyzeReportAction(
   prevState: ReportState,
   formData: FormData
 ): Promise<ReportState> {
+
   const validatedFields = reportSchema.safeParse({
     reportText: formData.get('reportText'),
     location: formData.get('location'),
@@ -70,8 +72,8 @@ export async function analyzeReportAction(
 
 // Safe Routes Action
 const routeSchema = z.object({
-  startLocation: z.string().min(3, { message: 'Se requiere la ubicación de inicio.' }),
-  endLocation: z.string().min(3, { message: 'Se requiere la ubicación final.' }),
+  startLocation: z.string().min(1, { message: 'Se requiere la ubicación de inicio.' }),
+  endLocation: z.string().min(1, { message: 'Se requiere la ubicación final.' }),
   transportMode: z.enum(['pedestrian', 'public_transport']),
 });
 
@@ -106,7 +108,10 @@ export async function planSafeRoutesAction(
 
   try {
     // In a real app, you might pass real incident data.
-    const result = await recommendSafeRoutes({ ...validatedFields.data, incidentData: "Informes recientes de robos cerca del Centro Comercial del Centro y vandalismo en el Parque Oak Street." });
+    const cityLayoutString = `Diseño de la ciudad y conexiones: ${JSON.stringify(cityLayout)}`;
+    const incidentData = `Informes recientes de robos cerca del Mercado Buenos Aires y vandalismo en el Parque 21 de Abril. ${cityLayoutString}`;
+
+    const result = await recommendSafeRoutes({ ...validatedFields.data, incidentData });
     revalidatePath('/routes');
     return { status: 'success', message: '¡Rutas seguras planeadas!', data: result };
   } catch (error) {

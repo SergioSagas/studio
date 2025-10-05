@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, useActionState } from 'react';
+import { useEffect, useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { RouteRecommendations } from '@/components/route-recommendations';
 import { Loader2, Route } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { locations } from '@/lib/locations';
+import { Input } from '@/components/ui/input';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -28,6 +30,9 @@ function SubmitButton() {
 
 export function RoutesForm() {
   const { toast } = useToast();
+  const [startLocation, setStartLocation] = useState('');
+  const [endLocation, setEndLocation] = useState('');
+
   const [state, formAction] = useActionState(planSafeRoutesAction, {
     status: 'idle',
   });
@@ -58,14 +63,22 @@ export function RoutesForm() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
+            <Input type="hidden" name="startLocation" value={startLocation} />
+            <Input type="hidden" name="endLocation" value={endLocation} />
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="startLocation">Ubicación de Inicio</Label>
-              <Input
-                id="startLocation"
-                name="startLocation"
-                placeholder="ej., Ayuntamiento"
-                required
-              />
+              <Label htmlFor="startLocation-select">Ubicación de Inicio</Label>
+              <Select onValueChange={setStartLocation} required value={startLocation}>
+                <SelectTrigger id="startLocation-select">
+                  <SelectValue placeholder="Selecciona una ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={`start-${location}`} value={location}>
+                      {location}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {state.errors?.startLocation && (
                 <p className="text-sm text-destructive">
                   {state.errors.startLocation[0]}
@@ -73,13 +86,19 @@ export function RoutesForm() {
               )}
             </div>
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="endLocation">Ubicación Final</Label>
-              <Input
-                id="endLocation"
-                name="endLocation"
-                placeholder="ej., Biblioteca Central"
-                required
-              />
+              <Label htmlFor="endLocation-select">Ubicación Final</Label>
+               <Select onValueChange={setEndLocation} required value={endLocation}>
+                <SelectTrigger id="endLocation-select">
+                  <SelectValue placeholder="Selecciona una ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={`end-${location}`} value={location}>
+                      {location}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {state.errors?.endLocation && (
                 <p className="text-sm text-destructive">
                   {state.errors.endLocation[0]}
