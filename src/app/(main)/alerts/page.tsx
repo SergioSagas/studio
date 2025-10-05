@@ -20,7 +20,6 @@ import {
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
-import { cleanLocationName } from '@/lib/utils';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -44,7 +43,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
             <CardTitle>{report.incidentType}</CardTitle>
             <CardDescription className="mt-1 flex items-center gap-2">
               <MapPin className="size-3.5" />
-              {cleanLocationName(report.location)}
+              {report.location}
             </CardDescription>
           </div>
            <Badge
