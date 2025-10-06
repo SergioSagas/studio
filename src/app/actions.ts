@@ -12,7 +12,7 @@ import { detectCrimePatterns, type DetectCrimePatternsOutput } from '@/ai/flows/
 import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { cityLayout } from '@/lib/city-layout';
+import { cityData } from '@/lib/city-layout';
 
 
 // Report Analysis Action
@@ -108,8 +108,8 @@ export async function planSafeRoutesAction(
 
   try {
     // In a real app, you might pass real incident data.
-    const cityLayoutString = `Diseño de la ciudad y conexiones: ${JSON.stringify(cityLayout)}`;
-    const incidentData = `Informes recientes de robos cerca del Mercado Buenos Aires y vandalismo en el Parque 21 de Abril. ${cityLayoutString}`;
+    const cityLayoutString = `Mapa de la ciudad y conexiones: ${JSON.stringify(cityData.Mapa_Base_Nuevo_Chimbote)}`;
+    const incidentData = `Informes recientes de robos cerca del Mercado Buenos Aires y vandalismo en el Parque 21 de Abril. Considera este mapa para las rutas: ${cityLayoutString}`;
 
     const result = await recommendSafeRoutes({ ...validatedFields.data, incidentData });
     revalidatePath('/routes');
