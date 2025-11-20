@@ -21,11 +21,15 @@
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["user", "admin"]
+          "enum": ["user", "admin", "security"]
         },
         "reputation": {
           "type": "number",
           "description": "The user's reputation score, starting at 10."
+        },
+        "neighborhood": {
+            "type": "string",
+            "description": "The neighborhood the user is subscribed to for local alerts."
         }
       },
       "required": ["firstName", "lastName", "email", "role", "reputation"]
@@ -104,7 +108,7 @@
         "type": {
           "type": "string",
           "description": "The type of notification (e.g., reputation_gain, reputation_loss, report_confirmed).",
-          "enum": ["reputation_gain", "reputation_loss", "report_confirmed", "report_disputed"]
+          "enum": ["reputation_gain", "reputation_loss", "report_confirmed", "report_disputed", "real_time_alert"]
         },
         "timestamp": {
           "type": "string",

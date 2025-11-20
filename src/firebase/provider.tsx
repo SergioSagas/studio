@@ -7,12 +7,13 @@ import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
 
-type UserProfile = {
-  role: 'admin' | 'user';
+export type UserProfile = {
+  role: 'admin' | 'user' | 'security';
   reputation: number;
   firstName: string;
   lastName: string;
   email: string;
+  neighborhood?: string;
 };
 
 interface FirebaseProviderProps {

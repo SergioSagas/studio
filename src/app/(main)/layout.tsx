@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useUser, useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
-import { LogOut, Loader2, Award } from 'lucide-react';
+import { LogOut, Loader2, Award, UserCog } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,11 +31,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationsBell } from '@/components/notifications-bell';
+import { ProfileSettingsModal } from '@/components/profile-settings-modal';
 
 function UserMenu() {
   const { user, userProfile, isUserLoading, isProfileLoading } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
 
   const handleLogout = async () => {
     if (!auth) return;
@@ -64,39 +66,51 @@ function UserMenu() {
   const reputation = userProfile?.reputation ?? 10;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user.photoURL ?? ''} alt={displayName ?? 'Usuario'} />
-            <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{displayName}</p>
-            {user.email && <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>}
+    <>
+      <ProfileSettingsModal 
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        userProfile={userProfile}
+        userId={user.uid}
+      />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={user.photoURL ?? ''} alt={displayName ?? 'Usuario'} />
+              <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{displayName}</p>
+              {user.email && <p className="text-xs leading-none text-muted-foreground">
+                {user.email}
+              </p>}
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="flex items-center justify-between px-2 py-1.5 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Award className="size-4" />
+              <span>Reputación</span>
+            </div>
+            <span className="font-semibold">{reputation}</span>
           </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-2 py-1.5 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Award className="size-4" />
-            <span>Reputación</span>
-          </div>
-          <span className="font-semibold">{reputation}</span>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Cerrar sesión</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSeparator />
+           <DropdownMenuItem onSelect={() => setIsProfileModalOpen(true)}>
+              <UserCog className="mr-2 h-4 w-4" />
+              <span>Ajustes de Perfil</span>
+           </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Cerrar sesión</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@/firebase';
+import type { UserProfile } from '@/firebase/provider';
 
 export function useUserRole() {
   const { userProfile, isProfileLoading, isUserLoading } = useUser();
-  const [role, setRole] = useState<'admin' | 'user' | null>(null);
+  const [role, setRole] = useState<UserProfile['role'] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

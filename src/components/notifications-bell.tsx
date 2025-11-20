@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Siren } from 'lucide-react';
 
 type Notification = {
   id: string;
   message: string;
-  type: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed';
+  type: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | 'real_time_alert';
   timestamp: Timestamp;
   read: boolean;
 };
@@ -68,6 +69,8 @@ export function NotificationsBell() {
           case 'reputation_loss':
           case 'report_disputed':
               return <AlertCircle className="size-4 text-yellow-500" />;
+          case 'real_time_alert':
+                return <Siren className="size-4 text-destructive" />;
           default:
             return <Bell className="size-4" />;
       }

@@ -16,8 +16,8 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import { getFirestore, doc, writeBatch, serverTimestamp, increment, collection } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
+import { collection, doc, writeBatch, serverTimestamp, increment, getDoc, getDocs, query, where } from 'firebase/firestore';
 
 
 // Report Analysis Action
@@ -170,6 +170,68 @@ export async function fetchCrimePatternsAction(
   }
 }
 
+
+// Server action to send real-time alerts. This action is secure.
+export async function sendRealTimeAlertsAction(input: {
+  reportId: string;
+  location: string;
+  riskLevel: 'medium' | 'high';
+  incidentType: string;
+}): Promise<{ status: 'success' | 'error'; message: string; notifiedCount: number }> {
+    const { firestore } = initializeFirebase();
+    const { location, riskLevel, incidentType } = input;
+    let notifiedCount = 0;
+
+    try {
+        const batch = writeBatch(firestore);
+
+        // 1. Get all security personnel
+        const securityQuery = query(collection(firestore, 'users'), where('role', '==', 'security'));
+        const securityUsersSnapshot = await getDocs(securityQuery);
+
+        securityUsersSnapshot.forEach(userDoc => {
+            const notificationRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+            batch.set(notificationRef, {
+                message: `Alerta de ${riskLevel === 'medium' ? 'Riesgo Medio' : 'Alto Riesgo'}: ${incidentType} en ${location}.`,
+                type: 'real_time_alert',
+                timestamp: serverTimestamp(),
+                read: false,
+                userId: userDoc.id
+            });
+            notifiedCount++;
+        });
+
+        // 2. Get all users subscribed to that neighborhood
+        const neighborhoodQuery = query(collection(firestore, 'users'), where('neighborhood', '==', location));
+        const neighborhoodUsersSnapshot = await getDocs(neighborhoodQuery);
+
+        neighborhoodUsersSnapshot.forEach(userDoc => {
+            // Avoid double-notifying security personnel if they are also subscribed
+            if (userDoc.data().role !== 'security') {
+                const notificationRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+                batch.set(notificationRef, {
+                    message: `Alerta en tu vecindario: Se reportó un incidente de ${riskLevel === 'medium' ? 'riesgo medio' : 'alto riesgo'} (${incidentType}).`,
+                    type: 'real_time_alert',
+                    timestamp: serverTimestamp(),
+                    read: false,
+                    userId: userDoc.id
+                });
+                notifiedCount++;
+            }
+        });
+
+        await batch.commit();
+
+        revalidatePath('/alerts');
+        return { status: 'success', message: 'Alerts sent.', notifiedCount };
+
+    } catch (error: any) {
+        console.error("Failed to send real-time alerts:", error);
+        return { status: 'error', message: error.message || 'Could not send alerts.', notifiedCount: 0 };
+    }
+}
+
+
 // --- Reputation and Voting Logic ---
 type ActionStateSimple = {
   status: 'success' | 'error';
@@ -187,13 +249,26 @@ export async function castVoteAction(input: {
 }
 
 
-export async function handleAdminReportAction({ report, newStatus }: { report: IncidentReport; newStatus: 'confirmed' | 'false' }): Promise<ActionStateSimple> {
+export async function handleAdminReportAction(input: {
+  reportId: string;
+  newStatus: 'confirmed' | 'false';
+  adminId: string;
+}): Promise<ActionStateSimple> {
+    const VOTE_THRESHOLD = 3; // Keep consistent
+    const { firestore } = initializeFirebase();
+    const { reportId, newStatus, adminId } = input;
+
     try {
-        const { firestore } = initializeFirebase();
         const batch = writeBatch(firestore);
 
-        const reportRef = doc(firestore, 'incidentReports', report.id);
-        const authorRef = doc(firestore, 'users', report.userId);
+        const reportRef = doc(firestore, 'incidentReports', reportId);
+        const reportDoc = await getDoc(reportRef);
+
+        if (!reportDoc.exists()) {
+            throw new Error("Report not found.");
+        }
+        const reportData = reportDoc.data() as IncidentReport;
+        const authorRef = doc(firestore, 'users', reportData.userId);
 
         batch.update(reportRef, { status: newStatus });
 
@@ -204,13 +279,13 @@ export async function handleAdminReportAction({ report, newStatus }: { report: I
             ? `Un administrador ha confirmado tu reporte.`
             : `Un administrador marcó tu reporte como falso.`;
 
-        const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
+        const notificationRef = doc(collection(firestore, 'users', reportData.userId, 'notifications'));
         batch.set(notificationRef, {
             message: notificationMessage,
             type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
             timestamp: serverTimestamp(),
             read: false,
-            userId: report.userId
+            userId: reportData.userId
         });
         
         await batch.commit();

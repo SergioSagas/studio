@@ -4,10 +4,11 @@ import { PageHeader } from '@/components/page-header';
 import { ReportForm } from '@/components/report-form';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, addDocumentNonBlocking, useUser } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, serverTimestamp } from 'firebase/firestore';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import type { IncidentReport } from '@/lib/data';
 import { useCallback, useState } from 'react';
+import { sendRealTimeAlertsAction } from '@/app/actions';
 
 export default function NewReportPage() {
   const { toast } = useToast();
@@ -41,12 +42,29 @@ export default function NewReportPage() {
       };
 
       const incidentReportsRef = collection(firestore, 'incidentReports');
-      await addDocumentNonBlocking(incidentReportsRef, newReport);
+      const docRef = await addDocumentNonBlocking(incidentReportsRef, newReport);
 
       toast({
         title: 'Reporte Enviado',
         description: 'Gracias por tu contribución a la seguridad de la comunidad.',
       });
+
+      // After saving, if risk is medium or high, trigger the alert action
+      if (newReport.riskLevel === 'medium' || newReport.riskLevel === 'high') {
+        const result = await sendRealTimeAlertsAction({
+          reportId: docRef.id,
+          location: newReport.location,
+          riskLevel: newReport.riskLevel,
+          incidentType: newReport.incidentType,
+        });
+        if (result.status === 'success') {
+          toast({
+            title: 'Alerta en Tiempo Real Enviada',
+            description: `Se notificó a ${result.notifiedCount} usuarios.`,
+          });
+        }
+      }
+
     } catch (error) {
        // The permission error will be handled globally by the FirebaseErrorListener
        // so we only need to toast for other potential errors.

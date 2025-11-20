@@ -29,7 +29,7 @@ const loginSchema = z.object({
   password: z
     .string()
     .min(6, { message: 'La contraseña debe tener al menos 6 caracteres.' }),
-  role: z.enum(['user', 'admin'], {
+  role: z.enum(['user', 'admin', 'security'], {
     required_error: 'Debes seleccionar un rol.',
   }),
 });
@@ -88,10 +88,11 @@ export default function LoginPage() {
             role: 'user',
             firstName: 'Usuario',
             lastName: 'Nuevo',
+            reputation: 10,
           });
         } else {
            await auth.signOut();
-           throw new Error('El perfil de administrador no existe.');
+           throw new Error(`El perfil de ${data.role} no existe.`);
         }
       } else if (userDoc.data().role !== data.role) {
         await auth.signOut();
@@ -181,9 +182,9 @@ export default function LoginPage() {
               <RadioGroup
                 value={role}
                 onValueChange={(value) =>
-                  setValue('role', value as 'user' | 'admin')
+                  setValue('role', value as 'user' | 'admin' | 'security')
                 }
-                className="grid grid-cols-2 gap-4"
+                className="grid grid-cols-3 gap-4"
               >
                 <div>
                   <RadioGroupItem
@@ -193,7 +194,7 @@ export default function LoginPage() {
                   />
                   <Label
                     htmlFor="user"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex h-full flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
                     Usuario
                   </Label>
@@ -206,9 +207,22 @@ export default function LoginPage() {
                   />
                   <Label
                     htmlFor="admin"
-                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    className="flex h-full flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
                   >
-                    Administrador
+                    Admin
+                  </Label>
+                </div>
+                 <div>
+                  <RadioGroupItem
+                    value="security"
+                    id="security"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="security"
+                    className="flex h-full flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                  >
+                    Seguridad
                   </Label>
                 </div>
               </RadioGroup>
