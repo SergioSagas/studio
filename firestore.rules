@@ -83,12 +83,13 @@ service cloud.firestore {
         let isConfirming = reportAfter.confirmations == reportBefore.confirmations.concat([userId]) && reportAfter.disputes == reportBefore.disputes;
         let isDisputing = reportAfter.disputes == reportBefore.disputes.concat([userId]) && reportAfter.confirmations == reportBefore.confirmations;
 
-        // Ensure other fields are not changed
-        let otherFieldsUnchanged = reportAfter.incidentType == reportBefore.incidentType &&
-                                   reportAfter.riskLevel == reportBefore.riskLevel &&
-                                   reportAfter.summary == reportBefore.summary &&
-                                   reportAfter.description == reportBefore.description &&
-                                   reportAfter.location == reportBefore.location;
+        // Ensure other fields are not changed by checking that they are not in the request
+        let otherFieldsUnchanged = !('incidentType' in reportAfter) &&
+                                   !('riskLevel' in reportAfter) &&
+                                   !('summary' in reportAfter) &&
+                                   !('description' in reportAfter) &&
+                                   !('location' in reportAfter) &&
+                                   !('status' in reportAfter);
                                    
         return (isConfirming || isDisputing) && otherFieldsUnchanged;
       }
