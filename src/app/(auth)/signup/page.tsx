@@ -78,6 +78,7 @@ export default function SignupPage() {
         lastName: data.lastName,
         email: data.email,
         role: 'user',
+        id: user.uid,
       });
       
       toast({
@@ -109,6 +110,7 @@ export default function SignupPage() {
                     lastName: data.lastName,
                     email: data.email,
                     role: 'user',
+                    id: user.uid,
                 });
                 toast({
                     title: 'Perfil de usuario restaurado',
@@ -122,23 +124,28 @@ export default function SignupPage() {
                 });
                 router.push('/login');
             }
-        } catch (repairError) {
-             console.error("Could not repair user profile:", repairError);
+        } catch (repairError: any) {
+             let description = 'No pudimos reparar tu perfil. La contraseña puede ser incorrecta o hubo otro error.';
+             if (repairError.code === 'auth/invalid-credential' || repairError.code === 'auth/wrong-password') {
+                description = 'No se pudo reparar el perfil porque la contraseña que ingresaste es incorrecta. Inténtalo de nuevo con la contraseña original.';
+             }
              toast({
                 variant: 'destructive',
                 title: 'Error al reparar',
-                description: 'No pudimos reparar tu perfil. La contraseña puede ser incorrecta o hubo otro error.',
+                description: description,
              });
         }
 
       } else {
         // Otros errores de registro
-        console.error('Signup error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Error al registrarse',
-          description: 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.',
-        });
+        // El error de permisos será capturado por el listener global
+        if(error.name !== 'FirebaseError') {
+             toast({
+              variant: 'destructive',
+              title: 'Error al registrarse',
+              description: 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.',
+            });
+        }
       }
     } finally {
       setLoading(false);

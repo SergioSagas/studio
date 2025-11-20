@@ -45,11 +45,15 @@ export default function NewReportPage() {
         description: 'Gracias por tu contribución a la seguridad de la comunidad.',
       });
     } catch (error) {
-       toast({
-        variant: 'destructive',
-        title: 'Error al guardar',
-        description: 'No se pudo guardar el reporte en la base de datos.',
-      });
+       // The permission error will be handled globally by the FirebaseErrorListener
+       // so we only need to toast for other potential errors.
+       if ((error as any)?.name !== 'FirebaseError') {
+            toast({
+                variant: 'destructive',
+                title: 'Error al guardar',
+                description: 'No se pudo guardar el reporte en la base de datos.',
+            });
+       }
     } finally {
         // Reset submission state after a short delay to prevent rapid re-submissions
         setTimeout(() => setIsSubmitting(false), 1000);
