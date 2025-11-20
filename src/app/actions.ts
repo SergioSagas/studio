@@ -16,8 +16,6 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -169,66 +167,13 @@ export async function fetchCrimePatternsAction(
   }
 }
 
-function getAdminApp() {
-    const appName = 'firebase-admin-app-server-actions';
-    const existingApp = getApps().find(app => app?.name === appName);
-    if (existingApp) {
-        return existingApp;
-    }
-
-    // Check if the service account environment variable is set
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccount) {
-        throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable is not set. Server-side actions will not work.');
-    }
-    
-    try {
-        const serviceAccountJson = JSON.parse(serviceAccount);
-        return initializeApp({
-            credential: cert(serviceAccountJson),
-        }, appName);
-    } catch (error: any) {
-        console.error("Firebase admin initialization error:", error.message);
-        throw new Error("Failed to initialize Firebase Admin SDK from service account. Server-side actions will not work.");
-    }
-}
-
-
-// Server action to get user IDs for real-time alerts. This action is secure.
+// This server action is no longer needed as the client will fetch the users directly.
+// We keep the file but comment out the function to avoid breaking changes.
+/*
 export async function getUsersForAlertsAction(input: {
   location: string;
 }): Promise<{ status: 'success' | 'error'; message: string; userIds: string[], securityIds: string[] }> {
-    try {
-        const adminApp = getAdminApp();
-        const firestore = getFirestore(adminApp);
-        const { location } = input;
-
-        const securityIds: string[] = [];
-        const userIds: string[] = [];
-        
-        const usersRef = firestore.collection('users');
-
-        // 1. Get all security personnel
-        const securityQuery = usersRef.where('role', '==', 'security');
-        const securityUsersSnapshot = await securityQuery.get();
-        securityUsersSnapshot.forEach(userDoc => {
-            securityIds.push(userDoc.id);
-        });
-
-        // 2. Get all users subscribed to that neighborhood
-        const neighborhoodQuery = usersRef.where('neighborhood', '==', location);
-        const neighborhoodUsersSnapshot = await neighborhoodQuery.get();
-        neighborhoodUsersSnapshot.forEach(userDoc => {
-             // Avoid double-notifying security personnel if they are also subscribed
-            if (userDoc.data().role !== 'security') {
-                userIds.push(userDoc.id);
-            }
-        });
-        
-        return { status: 'success', message: 'Users fetched.', userIds, securityIds };
-
-    } catch (error: any) {
-        console.error("Failed to fetch users for alerts:", error);
-        return { status: 'error', message: error.message || 'Could not fetch users for alerts.', userIds: [], securityIds: [] };
-    }
+    // This function is deprecated. Client-side logic should be used instead.
+    return { status: 'error', message: 'This server action is deprecated.', userIds: [], securityIds: [] };
 }
+*/

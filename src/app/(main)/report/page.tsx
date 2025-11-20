@@ -4,11 +4,11 @@ import { PageHeader } from '@/components/page-header';
 import { ReportForm } from '@/components/report-form';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, addDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { collection, writeBatch, doc, getDocs, query, where } from 'firebase/firestore';
 import type { AnalyzeCitizenReportOutput } from '@/ai/flows/analyze-citizen-reports.flow';
 import type { IncidentReport } from '@/lib/data';
 import { useCallback, useState } from 'react';
-import { getUsersForAlertsAction } from '@/app/actions';
+import type { UserProfile } from '@/firebase/provider';
 
 export default function NewReportPage() {
   const { toast } = useToast();
@@ -42,59 +42,70 @@ export default function NewReportPage() {
       };
 
       const incidentReportsRef = collection(firestore, 'incidentReports');
-      const docRef = await addDocumentNonBlocking(incidentReportsRef, newReport);
+      await addDocumentNonBlocking(incidentReportsRef, newReport);
 
       toast({
         title: 'Reporte Enviado',
         description: 'Gracias por tu contribución a la seguridad de la comunidad.',
       });
 
-      // After saving, if risk is medium or high, trigger the alert action
+      // After saving, if risk is medium or high, trigger the alert logic
       if (newReport.riskLevel === 'medium' || newReport.riskLevel === 'high') {
-        // 1. Fetch user lists from the server action
-        const usersResult = await getUsersForAlertsAction({ location: newReport.location });
+          const securityIds: string[] = [];
+          const userIds: string[] = [];
+          
+          const usersRef = collection(firestore, 'users');
 
-        if (usersResult.status === 'success') {
-          const { userIds, securityIds } = usersResult;
-          const totalToNotify = userIds.length + securityIds.length;
+          // 1. Get all security personnel
+          const securityQuery = query(usersRef, where('role', '==', 'security'));
+          const securityUsersSnapshot = await getDocs(securityQuery);
+          securityUsersSnapshot.forEach(userDoc => {
+              securityIds.push(userDoc.id);
+          });
 
-          if (totalToNotify > 0) {
-            // 2. Create notifications on the client using a batch write
-            const batch = writeBatch(firestore);
-            const alertTimestamp = new Date();
+          // 2. Get all users subscribed to that neighborhood
+          const neighborhoodQuery = query(usersRef, where('neighborhood', '==', newReport.location));
+          const neighborhoodUsersSnapshot = await getDocs(neighborhoodQuery);
+          neighborhoodUsersSnapshot.forEach(userDoc => {
+               // Avoid double-notifying security personnel if they are also subscribed
+              if ((userDoc.data() as UserProfile).role !== 'security') {
+                  userIds.push(userDoc.id);
+              }
+          });
 
-            securityIds.forEach(id => {
-              const notificationRef = doc(collection(firestore, `users/${id}/notifications`));
-              batch.set(notificationRef, {
-                message: `Alerta de ${newReport.riskLevel === 'medium' ? 'Riesgo Medio' : 'Alto Riesgo'}: ${newReport.incidentType} en ${newReport.location}.`,
-                type: 'real_time_alert',
-                timestamp: alertTimestamp,
-                read: false,
-                userId: id
-              });
+        const totalToNotify = userIds.length + securityIds.length;
+        if (totalToNotify > 0) {
+          const batch = writeBatch(firestore);
+          const alertTimestamp = new Date();
+
+          securityIds.forEach(id => {
+            const notificationRef = doc(collection(firestore, `users/${id}/notifications`));
+            batch.set(notificationRef, {
+              message: `Alerta de ${newReport.riskLevel === 'medium' ? 'Riesgo Medio' : 'Alto Riesgo'}: ${newReport.incidentType} en ${newReport.location}.`,
+              type: 'real_time_alert',
+              timestamp: alertTimestamp,
+              read: false,
+              userId: id
             });
+          });
 
-            userIds.forEach(id => {
-              const notificationRef = doc(collection(firestore, `users/${id}/notifications`));
-              batch.set(notificationRef, {
-                message: `Alerta en tu vecindario: Se reportó un incidente de ${newReport.riskLevel === 'medium' ? 'riesgo medio' : 'alto riesgo'} (${newReport.incidentType}).`,
-                type: 'real_time_alert',
-                timestamp: alertTimestamp,
-                read: false,
-                userId: id
-              });
+          userIds.forEach(id => {
+            const notificationRef = doc(collection(firestore, `users/${id}/notifications`));
+            batch.set(notificationRef, {
+              message: `Alerta en tu vecindario: Se reportó un incidente de ${newReport.riskLevel === 'medium' ? 'riesgo medio' : 'alto riesgo'} (${newReport.incidentType}).`,
+              type: 'real_time_alert',
+              timestamp: alertTimestamp,
+              read: false,
+              userId: id
             });
-            
-            await batch.commit();
+          });
+          
+          await batch.commit();
 
-            toast({
-              title: 'Alerta en Tiempo Real Enviada',
-              description: `Se notificó a ${totalToNotify} usuarios.`,
-            });
-          }
-        } else {
-          // The server action to get users failed
-          throw new Error(usersResult.message || 'No se pudieron obtener los destinatarios de la alerta.');
+          toast({
+            title: 'Alerta en Tiempo Real Enviada',
+            description: `Se notificó a ${totalToNotify} usuarios.`,
+          });
         }
       }
 
@@ -103,10 +114,9 @@ export default function NewReportPage() {
        toast({
             variant: 'destructive',
             title: 'Error al Enviar Alertas',
-            description: `El reporte se guardó, pero no se pudieron enviar las notificaciones en tiempo real: ${error.message}`,
+            description: `El reporte se guardó, pero no se pudieron enviar las notificaciones en tiempo real.`,
         });
     } finally {
-        // Reset submission state after a short delay to prevent rapid re-submissions
         setTimeout(() => setIsSubmitting(false), 1000);
     }
   }, [firestore, user, toast, isSubmitting]);

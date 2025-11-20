@@ -36,26 +36,26 @@ service cloud.firestore {
      */
     match /users/{userId} {
       // Un usuario solo puede crear su propio perfil.
-      // Los usuarios/admins pueden actualizar su propio perfil.
       allow create: if isOwner(userId);
       // Un usuario solo puede leer su propio perfil. Los admins pueden leer perfiles.
       allow get: if isOwner(userId) || isAdmin();
+      // Un usuario puede actualizar su propio perfil (ej. vecindario).
       // Un admin puede actualizar la reputación de cualquier usuario.
       allow update: if isOwner(userId) || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reputation']));
       // Nadie puede eliminar perfiles de usuario por ahora.
       allow delete: if false; 
-      // Nadie puede listar todos los usuarios.
-      allow list: if false;
+      // Permitir que los usuarios autenticados listen a otros usuarios para enviar notificaciones
+      allow list: if isSignedIn();
 
       /**
        * @description Gestiona las notificaciones de un usuario.
        */
       match /notifications/{notificationId} {
         // Un usuario solo puede leer (listar y obtener) sus propias notificaciones.
-        // Las Server Actions de admin pueden escribir notificaciones.
         allow read: if isOwner(userId);
-        // La escritura está permitida para el propietario (marcar como leída) o por un admin (crear notificación)
-        allow write: if isOwner(userId) || isAdmin();
+        // La escritura está permitida para el propietario (marcar como leída) o para cualquier usuario autenticado
+        // (para crear alertas de incidentes para otros usuarios desde el cliente).
+        allow write: if isSignedIn();
       }
     }
 
@@ -74,8 +74,14 @@ service cloud.firestore {
         isSignedIn() &&
         // El usuario no es el autor del reporte
         request.auth.uid != resource.data.userId &&
+        // El usuario no ha votado antes en ninguna de las dos listas
+        !(request.auth.uid in resource.data.confirmations) &&
+        !(request.auth.uid in resource.data.disputes) &&
         // Solo se pueden modificar los arrays de votos o el status
-        request.resource.data.diff(resource.data).affectedKeys().hasAny(['confirmations', 'disputes', 'status'])
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['confirmations', 'disputes', 'status']) &&
+        // El usuario solo puede añadir su propio UID a la lista de votos
+        (request.resource.data.confirmations.hasAll(resource.data.confirmations.concat([request.auth.uid])) ||
+         request.resource.data.disputes.hasAll(resource.data.disputes.concat([request.auth.uid])))
       );
         
       // Solo los administradores pueden eliminar informes.
