@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -80,9 +80,25 @@ export default function LoginPage() {
       const userDocRef = doc(firestore, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
-      if (!userDoc.exists() || userDoc.data().role !== data.role) {
-        await auth.signOut(); // Desloguear si el rol no es correcto
-        throw new Error('Rol no válido para este usuario.');
+      // Si el perfil no existe, créalo (autocorrección)
+      if (!userDoc.exists()) {
+        if (data.role === 'user') {
+          // Asumimos que no podemos obtener nombre/apellido aquí, así que creamos un perfil básico
+          await setDoc(userDocRef, {
+            email: user.email,
+            role: 'user',
+            firstName: 'Usuario',
+            lastName: 'Nuevo',
+          });
+        } else {
+           // Si intenta iniciar como admin y no existe, es un error.
+           await auth.signOut();
+           throw new Error('El perfil de administrador no existe.');
+        }
+      } else if (userDoc.data().role !== data.role) {
+        // Si el perfil existe pero el rol no coincide
+        await auth.signOut();
+        throw new Error('No tienes permiso para iniciar sesión con el rol seleccionado.');
       }
 
       toast({
@@ -92,14 +108,14 @@ export default function LoginPage() {
       router.push('/');
     } catch (error: any) {
       console.error('Login error:', error);
-      let description =
-        'Las credenciales son incorrectas. Por favor, inténtalo de nuevo.';
-      if (error.message === 'Rol no válido para este usuario.') {
-        description =
-          'No tienes permiso para iniciar sesión con el rol seleccionado.';
-      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      let description = 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.';
+      
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         description = 'El correo electrónico o la contraseña son incorrectos.';
+      } else if (error.message) {
+        description = error.message;
       }
+      
       toast({
         variant: 'destructive',
         title: 'Error al iniciar sesión',
