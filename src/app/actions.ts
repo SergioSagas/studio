@@ -19,7 +19,7 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import * as admin from 'firebase-admin';
+const admin = require('firebase-admin');
 import { FieldValue } from 'firebase-admin/firestore';
 
 // Report Analysis Action
@@ -177,7 +177,7 @@ export async function fetchCrimePatternsAction(
 
 const getAdminApp = () => {
   const appName = 'firebase-admin-app-reputation';
-  if (admin.apps.find(app => app?.name === appName)) {
+  if (admin.apps.find((app: any) => app?.name === appName)) {
     return admin.app(appName);
   }
   // This simplified initialization works in App Hosting and local dev with service account env var
@@ -218,7 +218,7 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
   try {
     const reportRef = firestore.collection('incidentReports').doc(reportId);
     
-    await firestore.runTransaction(async (transaction) => {
+    await firestore.runTransaction(async (transaction: any) => {
       const reportDoc = await transaction.get(reportRef);
       if (!reportDoc.exists) {
         throw new Error('El reporte no existe.');
@@ -338,14 +338,14 @@ export async function handleAdminReportAction(prevState: VoteState, formData: Fo
 
     const reportRef = firestore.collection('incidentReports').doc(reportId);
     
-    await firestore.runTransaction(async (transaction) => {
+    await firestore.runTransaction(async (transaction: any) => {
         const reportDoc = await transaction.get(reportRef);
         if (!reportDoc.exists) throw new Error("El reporte no existe.");
         
         const report = reportDoc.data() as IncidentReport;
         if (report.status === newStatus) {
-            // Si el estado ya es el deseado, no hacemos nada para evitar errores o lógica duplicada.
-            // Pero podríamos devolver un mensaje informativo si quisiéramos.
+            // If the status is already the desired one, do nothing to avoid errors or duplicate logic.
+            // But we could return an informative message if we wanted.
             return;
         };
 
