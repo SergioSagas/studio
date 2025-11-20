@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bell, Award, AlertCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, updateDoc, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, limit, writeBatch, Timestamp, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,7 +20,7 @@ type Notification = {
   id: string;
   message: string;
   type: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed';
-  timestamp: string;
+  timestamp: Timestamp; // Changed from string to Timestamp
   read: boolean;
 };
 
@@ -84,6 +84,15 @@ export function NotificationsBell() {
       }
   }
 
+  const formatTimestamp = (timestamp: Timestamp | null) => {
+    if (!timestamp) {
+        return 'Invalid date';
+    }
+    // Firestore Timestamps have a toDate() method.
+    return timestamp.toDate().toLocaleString();
+  };
+
+
   return (
     <>
       <audio ref={audioRef} src="/sounds/success.mp3" preload="auto" />
@@ -113,7 +122,7 @@ export function NotificationsBell() {
                 </div>
                 <div className="flex flex-col">
                     <p className="text-sm leading-snug">{notif.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{new Date(notif.timestamp).toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(notif.timestamp)}</p>
                 </div>
               </DropdownMenuItem>
             ))

@@ -16,6 +16,9 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
+import { getFirestore, doc, writeBatch, serverTimestamp, increment, collection } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -173,23 +176,51 @@ type ActionStateSimple = {
   message: string;
 };
 
+// Simplified action just for revalidation
 export async function castVoteAction(input: {
   reportId: string;
   voteType: 'confirm' | 'dispute';
   actionUserId: string;
-}): Promise<ActionStateSimple> {
+}): Promise<void> {
     revalidatePath('/');
     revalidatePath('/alerts');
-    return { status: 'success', message: 'Voto procesado por el cliente.' };
 }
 
 
-export async function handleAdminReportAction(input: {
-  reportId: string;
-  newStatus: 'confirmed' | 'false';
-  adminId: string;
-}): Promise<ActionStateSimple> {
-    revalidatePath('/');
-    revalidatePath('/alerts');
-    return { status: 'success', message: `Acción de admin procesada por el cliente.` };
+export async function handleAdminReportAction({ report, newStatus }: { report: IncidentReport; newStatus: 'confirmed' | 'false' }): Promise<ActionStateSimple> {
+    try {
+        const { firestore } = initializeFirebase();
+        const batch = writeBatch(firestore);
+
+        const reportRef = doc(firestore, 'incidentReports', report.id);
+        const authorRef = doc(firestore, 'users', report.userId);
+
+        batch.update(reportRef, { status: newStatus });
+
+        const reputationChange = newStatus === 'confirmed' ? 1 : -2;
+        batch.update(authorRef, { reputation: increment(reputationChange) });
+        
+        const notificationMessage = newStatus === 'confirmed'
+            ? `Un administrador ha confirmado tu reporte.`
+            : `Un administrador marcó tu reporte como falso.`;
+
+        const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
+        batch.set(notificationRef, {
+            message: notificationMessage,
+            type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
+            timestamp: serverTimestamp(),
+            read: false,
+            userId: report.userId
+        });
+        
+        await batch.commit();
+        
+        revalidatePath('/');
+        revalidatePath('/alerts');
+        
+        return { status: 'success', message: 'Acción completada.' };
+    } catch (error: any) {
+        console.error("Admin action failed:", error);
+        return { status: 'error', message: error.message || "No se pudo completar la acción de administrador." };
+    }
 }
