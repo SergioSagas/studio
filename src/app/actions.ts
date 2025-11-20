@@ -16,7 +16,7 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, doc, updateDoc, getDoc, FieldValue } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -188,10 +188,7 @@ function getAdminApp(): App {
   // This initialization is simplified to work in both local dev and App Hosting.
   // In App Hosting, environment variables are automatically picked up.
   // In local dev, it may fall back to other ADC mechanisms.
-  return initializeApp(
-    { projectId: firebaseConfig.projectId },
-    appName
-  );
+  return initializeApp({ projectId: firebaseConfig.projectId }, appName);
 }
 
 async function updateUserReputation(userId: string, change: number) {
