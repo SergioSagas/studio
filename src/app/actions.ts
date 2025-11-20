@@ -16,9 +16,22 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import { initializeFirebase } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, increment, getDoc, getDocs, query, where } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
 
+// --- Firebase Admin SDK Initialization ---
+function getAdminApp() {
+  const appName = 'firebase-admin-app-server-actions';
+  
+  // Evitar reinicializar la app
+  if (admin.apps.some(app => app?.name === appName)) {
+    return admin.app(appName);
+  }
+  
+  // Las credenciales se toman automáticamente de las variables de entorno en App Hosting
+  return admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+  }, appName);
+};
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -178,23 +191,25 @@ export async function sendRealTimeAlertsAction(input: {
   riskLevel: 'medium' | 'high';
   incidentType: string;
 }): Promise<{ status: 'success' | 'error'; message: string; notifiedCount: number }> {
-    const { firestore } = initializeFirebase();
+    const adminApp = getAdminApp();
+    const firestore = adminApp.firestore();
     const { location, riskLevel, incidentType } = input;
     let notifiedCount = 0;
 
     try {
-        const batch = writeBatch(firestore);
+        const batch = firestore.batch();
+        const usersRef = firestore.collection('users');
 
         // 1. Get all security personnel
-        const securityQuery = query(collection(firestore, 'users'), where('role', '==', 'security'));
-        const securityUsersSnapshot = await getDocs(securityQuery);
+        const securityQuery = usersRef.where('role', '==', 'security');
+        const securityUsersSnapshot = await securityQuery.get();
 
         securityUsersSnapshot.forEach(userDoc => {
-            const notificationRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+            const notificationRef = firestore.collection(`users/${userDoc.id}/notifications`).doc();
             batch.set(notificationRef, {
                 message: `Alerta de ${riskLevel === 'medium' ? 'Riesgo Medio' : 'Alto Riesgo'}: ${incidentType} en ${location}.`,
                 type: 'real_time_alert',
-                timestamp: serverTimestamp(),
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 read: false,
                 userId: userDoc.id
             });
@@ -202,17 +217,17 @@ export async function sendRealTimeAlertsAction(input: {
         });
 
         // 2. Get all users subscribed to that neighborhood
-        const neighborhoodQuery = query(collection(firestore, 'users'), where('neighborhood', '==', location));
-        const neighborhoodUsersSnapshot = await getDocs(neighborhoodQuery);
+        const neighborhoodQuery = usersRef.where('neighborhood', '==', location);
+        const neighborhoodUsersSnapshot = await neighborhoodQuery.get();
 
         neighborhoodUsersSnapshot.forEach(userDoc => {
             // Avoid double-notifying security personnel if they are also subscribed
             if (userDoc.data().role !== 'security') {
-                const notificationRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+                const notificationRef = firestore.collection(`users/${userDoc.id}/notifications`).doc();
                 batch.set(notificationRef, {
                     message: `Alerta en tu vecindario: Se reportó un incidente de ${riskLevel === 'medium' ? 'riesgo medio' : 'alto riesgo'} (${incidentType}).`,
                     type: 'real_time_alert',
-                    timestamp: serverTimestamp(),
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
                     read: false,
                     userId: userDoc.id
                 });
@@ -254,36 +269,36 @@ export async function handleAdminReportAction(input: {
   newStatus: 'confirmed' | 'false';
   adminId: string;
 }): Promise<ActionStateSimple> {
-    const VOTE_THRESHOLD = 3; // Keep consistent
-    const { firestore } = initializeFirebase();
-    const { reportId, newStatus, adminId } = input;
+    const adminApp = getAdminApp();
+    const firestore = adminApp.firestore();
+    const { reportId, newStatus } = input;
 
     try {
-        const batch = writeBatch(firestore);
+        const batch = firestore.batch();
 
-        const reportRef = doc(firestore, 'incidentReports', reportId);
-        const reportDoc = await getDoc(reportRef);
+        const reportRef = firestore.collection('incidentReports').doc(reportId);
+        const reportDoc = await reportRef.get();
 
-        if (!reportDoc.exists()) {
+        if (!reportDoc.exists) {
             throw new Error("Report not found.");
         }
         const reportData = reportDoc.data() as IncidentReport;
-        const authorRef = doc(firestore, 'users', reportData.userId);
+        const authorRef = firestore.collection('users').doc(reportData.userId);
 
         batch.update(reportRef, { status: newStatus });
 
         const reputationChange = newStatus === 'confirmed' ? 1 : -2;
-        batch.update(authorRef, { reputation: increment(reputationChange) });
+        batch.update(authorRef, { reputation: admin.firestore.FieldValue.increment(reputationChange) });
         
         const notificationMessage = newStatus === 'confirmed'
             ? `Un administrador ha confirmado tu reporte.`
             : `Un administrador marcó tu reporte como falso.`;
 
-        const notificationRef = doc(collection(firestore, 'users', reportData.userId, 'notifications'));
+        const notificationRef = firestore.collection('users').doc(reportData.userId).collection('notifications').doc();
         batch.set(notificationRef, {
             message: notificationMessage,
             type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
-            timestamp: serverTimestamp(),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
             read: false,
             userId: reportData.userId
         });

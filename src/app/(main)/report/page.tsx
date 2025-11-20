@@ -57,24 +57,28 @@ export default function NewReportPage() {
           riskLevel: newReport.riskLevel,
           incidentType: newReport.incidentType,
         });
-        if (result.status === 'success') {
+
+        if (result.status === 'success' && result.notifiedCount > 0) {
           toast({
             title: 'Alerta en Tiempo Real Enviada',
             description: `Se notificó a ${result.notifiedCount} usuarios.`,
           });
+        } else if (result.status === 'error') {
+            toast({
+                variant: 'destructive',
+                title: 'Error al Enviar Alertas',
+                description: 'El reporte se guardó, pero no se pudieron enviar las notificaciones en tiempo real.',
+            });
         }
       }
 
     } catch (error) {
-       // The permission error will be handled globally by the FirebaseErrorListener
-       // so we only need to toast for other potential errors.
-       if ((error as any)?.name !== 'FirebaseError') {
-            toast({
-                variant: 'destructive',
-                title: 'Error al guardar',
-                description: 'No se pudo guardar el reporte en la base de datos.',
-            });
-       }
+       console.error("Error submitting report:", error);
+       toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudo guardar el reporte en la base de datos.',
+        });
     } finally {
         // Reset submission state after a short delay to prevent rapid re-submissions
         setTimeout(() => setIsSubmitting(false), 1000);
