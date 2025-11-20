@@ -208,7 +208,7 @@ export async function handleAdminReportAction(input: { reportId: string; newStat
   if (!validatedFields.success) {
     return { status: 'error', message: 'Datos de acción de admin inválidos.' };
   }
-
+  
   revalidatePath('/');
   revalidatePath('/alerts');
   return { status: 'success', message: `Reporte marcado como ${validatedFields.data.newStatus === 'confirmed' ? 'confirmado' : 'falso'}.` };

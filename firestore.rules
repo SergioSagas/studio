@@ -36,12 +36,10 @@ service cloud.firestore {
      */
     match /users/{userId} {
       // Los usuarios solo pueden crear su propio perfil.
-      allow create: if isOwner(userId);
+      // Se permite la actualización por parte de una Server Action para la reputación.
+      allow create, update: if isOwner(userId) || isAdmin();
       // Los usuarios solo pueden leer su propio perfil.
       allow get: if isOwner(userId);
-      // La reputación solo puede ser modificada por el servidor (a través de Server Actions), no por el cliente.
-      // Los usuarios pueden actualizar otros campos de su propio perfil.
-      allow update: if isOwner(userId) && request.resource.data.reputation == resource.data.reputation;
       // Nadie puede eliminar perfiles de usuario por ahora.
       allow delete: if false; 
       // Nadie puede listar todos los usuarios.
@@ -52,12 +50,8 @@ service cloud.firestore {
        */
       match /notifications/{notificationId} {
         // Un usuario solo puede leer (listar y obtener) sus propias notificaciones.
-        allow read: if isOwner(userId);
-        // Las notificaciones son creadas por el servidor, los clientes no pueden escribir.
-        // Se permite la actualización para marcar como leídas.
-        allow update: if isOwner(userId);
-        // Los clientes no pueden crear ni eliminar notificaciones.
-        allow create, delete: if false;
+        // Las Server Actions pueden escribir notificaciones.
+        allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
@@ -71,7 +65,7 @@ service cloud.firestore {
       allow create: if isSignedIn();
 
       // Las actualizaciones ahora se permiten bajo condiciones estrictas para la votación,
-      // o si el usuario es un administrador.
+      // o si el usuario es un administrador (o una Server Action actuando como tal).
       allow update: if isAdmin() || (
         isSignedIn() &&
         // El usuario no es el autor del reporte

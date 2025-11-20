@@ -49,7 +49,6 @@ import {
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
 import { castVoteAction, handleAdminReportAction } from '@/app/actions';
-import { generateNotification } from '@/ai/flows/generate-notification.flow';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -107,56 +106,36 @@ export default function DashboardPage() {
     setIsActionPending(report.id);
     
     try {
+      const actionResult = await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
+      if (actionResult.status === 'error') {
+        throw new Error(actionResult.message);
+      }
+      
       const reportRef = doc(firestore, 'incidentReports', report.id);
       const authorRef = doc(firestore, 'users', report.userId);
       const batch = writeBatch(firestore);
 
       batch.update(reportRef, { status: newStatus });
       
-      const actionResult = await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
-      if (actionResult.status === 'error') {
-        throw new Error(actionResult.message);
-      }
-      
       let reputationChange = 0;
-      let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
 
       if (newStatus === 'confirmed' && report.status !== 'confirmed') {
           reputationChange = 1;
-          notificationType = 'report_confirmed';
       } else if (newStatus === 'false' && report.status !== 'false') {
           reputationChange = -2;
-          notificationType = 'report_disputed';
       }
-
+      
       if (reputationChange !== 0) {
         const authorDoc = await getDoc(authorRef);
         const authorProfile = authorDoc.data();
         if (authorProfile) {
           const newReputation = (authorProfile.reputation || 10) + reputationChange;
           batch.update(authorRef, { reputation: newReputation });
-          
-          try {
-              const notificationMsg = await generateNotification({
-                  userName: authorProfile.firstName,
-                  eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
-                  newReputation: newReputation,
-              });
-              const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
-              batch.set(notificationRef, {
-                  userId: report.userId,
-                  message: notificationMsg.message,
-                  type: notificationType,
-                  timestamp: new Date().toISOString(),
-                  read: false,
-              });
-          } catch(e) {
-              console.error("Failed to generate or save notification:", e);
-          }
         }
       }
 
       await batch.commit();
+
       toast({ title: 'Acción completada', description: actionResult.message });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error en la acción', description: error.message });
@@ -171,68 +150,15 @@ export default function DashboardPage() {
     
     try {
       const reportRef = doc(firestore, 'incidentReports', report.id);
-      const authorRef = doc(firestore, 'users', report.userId);
-      const batch = writeBatch(firestore);
-
-      batch.update(reportRef, {
+      await writeBatch(firestore).update(reportRef, {
         [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
-      });
-      
+      }).commit();
+
       const actionResult = await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
       if (actionResult.status === 'error') {
         throw new Error(actionResult.message);
       }
 
-      const newConfirmations = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
-      const newDisputes = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
-
-      let reputationChange = 0;
-      let newStatus: IncidentReport['status'] | null = null;
-      let notificationType: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | null = null;
-
-      if (voteType === 'confirm' && newConfirmations >= VOTE_THRESHOLD) {
-        newStatus = 'confirmed';
-        reputationChange = 1;
-        notificationType = 'report_confirmed';
-      }
-      if (voteType === 'dispute' && newDisputes >= VOTE_THRESHOLD) {
-        newStatus = 'disputed';
-        reputationChange = -1;
-        notificationType = 'report_disputed';
-      }
-
-      if (newStatus) {
-        batch.update(reportRef, { status: newStatus });
-      }
-
-      if (reputationChange !== 0) {
-        const authorDoc = await getDoc(authorRef);
-        const authorProfile = authorDoc.data();
-        if (authorProfile) {
-          const newReputation = (authorProfile.reputation || 10) + reputationChange;
-          batch.update(authorRef, { reputation: newReputation });
-          
-          try {
-            const notificationMsg = await generateNotification({
-              userName: authorProfile.firstName,
-              eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
-              newReputation: newReputation
-            });
-            const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
-            batch.set(notificationRef, {
-              userId: report.userId,
-              message: notificationMsg.message,
-              type: notificationType,
-              timestamp: new Date().toISOString(),
-              read: false,
-            });
-          } catch(e) {
-            console.error("Failed to generate or save notification:", e);
-          }
-        }
-      }
-
-      await batch.commit();
       toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error al votar', description: error.message });

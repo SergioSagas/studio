@@ -20,14 +20,13 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, orderBy, doc, arrayUnion, writeBatch, getDocs, getDoc } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { collection, query, orderBy, doc, arrayUnion, writeBatch, getDoc } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { castVoteAction } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
-import { generateNotification } from '@/ai/flows/generate-notification.flow';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -56,15 +55,13 @@ function AlertCard({ report }: { report: IncidentReport }) {
     setIsVoting(true);
 
     try {
+      // Client-side optimistic update: just add the vote
       const reportRef = doc(firestore, 'incidentReports', report.id);
-      const authorRef = doc(firestore, 'users', report.userId);
-      const batch = writeBatch(firestore);
-
-      // 1. Add the vote
-      batch.update(reportRef, {
+      await writeBatch(firestore).update(reportRef, {
         [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
-      });
+      }).commit();
       
+      // Server-side action for complex logic
       const actionResult = await castVoteAction({
         reportId: report.id,
         voteType: voteType,
@@ -74,59 +71,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
       if (actionResult.status === 'error') {
         throw new Error(actionResult.message);
       }
-
-      // 2. Check thresholds and update status/reputation
-      const newConfirmations = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
-      const newDisputes = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
-
-      let reputationChange = 0;
-      let newStatus: IncidentReport['status'] | null = null;
-      let notificationType: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | null = null;
-
-      if (voteType === 'confirm' && newConfirmations >= VOTE_THRESHOLD) {
-        newStatus = 'confirmed';
-        reputationChange = 1;
-        notificationType = 'report_confirmed';
-      }
-      if (voteType === 'dispute' && newDisputes >= VOTE_THRESHOLD) {
-        newStatus = 'disputed';
-        reputationChange = -1;
-        notificationType = 'report_disputed';
-      }
-
-      if (newStatus) {
-        batch.update(reportRef, { status: newStatus });
-      }
-
-      if (reputationChange !== 0) {
-        const authorDoc = await getDoc(authorRef);
-        const authorProfile = authorDoc.data();
-        if (authorProfile) {
-          const newReputation = (authorProfile.reputation || 10) + reputationChange;
-          batch.update(authorRef, { reputation: newReputation });
-          
-          try {
-              const notificationMsg = await generateNotification({
-                  userName: authorProfile.firstName,
-                  eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
-                  newReputation: newReputation
-              });
-              const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
-              batch.set(notificationRef, {
-                  userId: report.userId,
-                  message: notificationMsg.message,
-                  type: notificationType,
-                  timestamp: new Date().toISOString(),
-                  read: false,
-              });
-          } catch(e) {
-              console.error("Failed to generate or save notification:", e);
-          }
-        }
-      }
-
-      await batch.commit();
-
+      
       toast({
         title: 'Voto Registrado',
         description: 'Tu voto ha sido registrado con éxito.',
