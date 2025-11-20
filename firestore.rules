@@ -32,7 +32,7 @@ service cloud.firestore {
     }
 
     /**
-     * @description Gestiona los datos del perfil de usuario.
+     * @description Gestiona los datos del perfil de usuario y sus subcolecciones.
      */
     match /users/{userId} {
       // Los usuarios solo pueden crear su propio perfil.
@@ -46,10 +46,23 @@ service cloud.firestore {
       allow delete: if false; 
       // Nadie puede listar todos los usuarios.
       allow list: if false;
+
+      /**
+       * @description Gestiona las notificaciones de un usuario.
+       */
+      match /notifications/{notificationId} {
+        // Un usuario solo puede leer (listar y obtener) sus propias notificaciones.
+        allow read: if isOwner(userId);
+        // Las notificaciones son creadas por el servidor, los clientes no pueden escribir.
+        // Se permite la actualización para marcar como leídas.
+        allow update: if isOwner(userId);
+        // Los clientes no pueden crear ni eliminar notificaciones.
+        allow create, delete: if false;
+      }
     }
 
     /**
-     * @description Gestiona los informes de incidentes, con lógica de validación comunitaria y de administrador.
+     * @description Gestiona los informes de incidentes.
      */
     match /incidentReports/{incidentReportId} {
       // Cualquiera (autenticado o no) puede leer informes de incidentes.
@@ -57,8 +70,8 @@ service cloud.firestore {
       // Cualquier usuario autenticado puede crear un informe.
       allow create: if isSignedIn();
 
-      // Las actualizaciones directas de votos están deshabilitadas. La lógica de votación ahora se maneja
-      // de forma segura a través de una Server Action.
+      // Las actualizaciones directas están deshabilitadas. La lógica de votación y estado
+      // ahora se maneja de forma segura a través de Server Actions.
       // Solo los administradores pueden actualizar directamente el estado de un informe.
       allow update: if isAdmin();
         
