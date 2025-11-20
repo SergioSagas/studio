@@ -70,10 +70,31 @@ service cloud.firestore {
       // Cualquier usuario autenticado puede crear un informe.
       allow create: if isSignedIn();
 
-      // Las actualizaciones directas están deshabilitadas. La lógica de votación y estado
-      // ahora se maneja de forma segura a través de Server Actions.
-      // Solo los administradores pueden actualizar directamente el estado de un informe.
-      allow update: if isAdmin();
+      // Las actualizaciones ahora se permiten bajo condiciones estrictas para la votación,
+      // o si el usuario es un administrador.
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        // El usuario no es el autor del reporte
+        request.auth.uid != resource.data.userId &&
+        // El usuario no ha votado antes
+        !(request.auth.uid in resource.data.confirmations) &&
+        !(request.auth.uid in resource.data.disputes) &&
+        // Solo se puede modificar confirmations o disputes
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmations', 'disputes']) &&
+        // Se asegura que solo se añade un voto
+        (
+          (
+            request.resource.data.confirmations.size() == resource.data.confirmations.size() + 1 &&
+            request.resource.data.confirmations.hasAll(resource.data.confirmations) &&
+            request.resource.data.confirmations.hasAny([request.auth.uid])
+          ) ||
+          (
+            request.resource.data.disputes.size() == resource.data.disputes.size() + 1 &&
+            request.resource.data.disputes.hasAll(resource.data.disputes) &&
+            request.resource.data.disputes.hasAny([request.auth.uid])
+          )
+        )
+      );
         
       // Solo los administradores pueden eliminar informes.
       allow delete: if isAdmin();
