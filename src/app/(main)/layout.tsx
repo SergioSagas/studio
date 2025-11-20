@@ -16,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { useUser, useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -114,13 +115,40 @@ function UserMenu() {
   );
 }
 
+function MainNav() {
+    const pathname = usePathname();
+    const { setOpenMobile } = useSidebar();
+  
+    return (
+      <SidebarMenu>
+        {navItems.map((item) => {
+          const isActive = item.exact
+            ? pathname === item.href
+            : pathname.startsWith(item.href) && item.href !== '/';
+          return (
+            <SidebarMenuItem key={item.label}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive}
+                tooltip={{ children: item.label }}
+              >
+                <Link href={item.href} onClick={() => setOpenMobile(false)}>
+                  <item.icon />
+                  <span>{item.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        })}
+      </SidebarMenu>
+    );
+}
 
 export default function MainLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
   const { user, isUserLoading } = useUser();
   
@@ -150,27 +178,7 @@ export default function MainLayout({
           </div>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => {
-              const isActive = item.exact
-                ? pathname === item.href
-                : pathname.startsWith(item.href) && item.href !== '/';
-              return (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive}
-                    tooltip={{ children: item.label }}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+          <MainNav />
         </SidebarContent>
       </Sidebar>
       <SidebarInset className="flex flex-col">
