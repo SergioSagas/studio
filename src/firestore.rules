@@ -36,7 +36,6 @@ service cloud.firestore {
      */
     match /users/{userId} {
       // Un usuario solo puede crear su propio perfil.
-      // Los usuarios/admins pueden actualizar su propio perfil.
       allow create: if isOwner(userId);
       // Un usuario solo puede leer su propio perfil. Los admins pueden leer perfiles.
       allow get: if isOwner(userId) || isAdmin();
@@ -50,13 +49,16 @@ service cloud.firestore {
 
       /**
        * @description Gestiona las notificaciones de un usuario.
+       *              Se permite la escritura por parte de cualquier usuario autenticado para que
+       *              la lógica del cliente pueda crear notificaciones de alerta en tiempo real
+       *              después de una acción del servidor.
        */
       match /notifications/{notificationId} {
         // Un usuario solo puede leer (listar y obtener) sus propias notificaciones.
         allow read: if isOwner(userId);
-        // La escritura está permitida para el propietario (marcar como leída) o por un admin (crear notificación)
-        // Las Server Actions de admin pueden escribir notificaciones.
-        allow write: if isOwner(userId) || isAdmin();
+        // La escritura está permitida para el propietario (marcar como leída) o para cualquier usuario autenticado
+        // (para crear alertas de incidentes para otros usuarios).
+        allow write: if isSignedIn();
       }
     }
 
@@ -75,6 +77,9 @@ service cloud.firestore {
         isSignedIn() &&
         // El usuario no es el autor del reporte
         request.auth.uid != resource.data.userId &&
+        // El usuario no ha votado antes en ninguna de las dos listas
+        !(request.auth.uid in resource.data.confirmations) &&
+        !(request.auth.uid in resource.data.disputes) &&
         // Solo se pueden modificar los arrays de votos o el status
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['confirmations', 'disputes', 'status']) &&
         // El usuario solo puede añadir su propio UID a la lista de votos
