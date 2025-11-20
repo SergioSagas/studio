@@ -25,9 +25,23 @@ const chartConfig = {
   theft: { label: 'Robo', color: 'hsl(var(--chart-2))' },
   robbery: { label: 'Asalto', color: 'hsl(var(--chart-3))' },
   suspicious_activity: { label: 'Actividad Sospechosa', color: 'hsl(var(--chart-4))' },
-  other: { label: 'Otro', color: 'hsl(var(--chart-5))' },
+  animal_attack: { label: 'Ataque de Animal', color: 'hsl(var(--chart-5))' },
+  other: { label: 'Otro', color: 'hsl(var(--chart-2))' }, // Re-using a color for 'other'
 } satisfies ChartConfig;
 
+const incidentTypeToChartKey = (incidentType: string): string => {
+    const key = incidentType.toLowerCase().replace(/\s+/g, '_');
+    // A mapping to handle variations from the AI.
+    const mapping: { [key: string]: string } = {
+        'robo': 'theft',
+        'asalto': 'robbery',
+        'vandalismo': 'vandalism',
+        'actividad_sospechosa': 'suspicious_activity',
+        'ataque_de_animal': 'animal_attack',
+        'animal_attack': 'animal_attack',
+    };
+    return mapping[key] || 'other';
+};
 
 export function CrimePatternsChart({ patterns }: { patterns: DetectCrimePatternsOutput['patterns'] }) {
     
@@ -37,9 +51,9 @@ export function CrimePatternsChart({ patterns }: { patterns: DetectCrimePatterns
             zoneData = { zone: pattern.zone };
             acc.push(zoneData);
         }
+        
         pattern.incidentTypes.forEach(type => {
-            const key = type.toLowerCase().replace(" ", "_");
-            const chartKey = Object.keys(chartConfig).includes(key) ? key : 'other';
+            const chartKey = incidentTypeToChartKey(type);
             if (!zoneData[chartKey]) {
                 zoneData[chartKey] = 0;
             }
