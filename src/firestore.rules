@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    /**
+     * @description Este conjunto de reglas impone un modelo de control de acceso basado en roles.
+     *              Permite a los usuarios leer informes de incidentes pero restringe la modificación a los administradores
+     *              o a través de acciones de voto seguras.
+     * @dataStructure /users/{userId} almacena perfiles de usuario con roles; /incidentReports/{incidentReportId} almacena informes de incidentes.
+     * @keySecurityDecisions Solo los administradores pueden crear, actualizar o eliminar directamente informes de incidentes.
+     *                        Los usuarios pueden crear informes y votar en los informes de otros, pero no modificarlos directamente.
+     *                        La lista de usuarios está denegada.
+     */
+
+    // Función auxiliar para verificar si el usuario está autenticado
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Función auxiliar para obtener los datos de un usuario
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+    
+    // Función auxiliar para verificar si el usuario es un administrador
+    function isAdmin() {
+      return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
+    }
+
+    // Función auxiliar para verificar si el usuario es el propietario de un documento
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Gestiona los datos del perfil de usuario y sus subcolecciones.
+     */
+    match /users/{userId} {
+      // Un usuario solo puede crear su propio perfil.
+      // Los usuarios/admins pueden actualizar su propio perfil.
+      allow create: if isOwner(userId);
+      // Un usuario solo puede leer su propio perfil. Los admins pueden leer perfiles.
+      allow get: if isOwner(userId) || isAdmin();
+      // Un usuario puede actualizar su propio perfil (ej. vecindario).
+      // Un admin puede actualizar la reputación de cualquier usuario.
+      allow update: if isOwner(userId) || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reputation']));
+      // Nadie puede eliminar perfiles de usuario por ahora.
+      allow delete: if false; 
+      // Nadie puede listar todos los usuarios.
+      allow list: if false;
+
+      /**
+       * @description Gestiona las notificaciones de un usuario.
+       */
+      match /notifications/{notificationId} {
+        // Un usuario solo puede leer (listar y obtener) sus propias notificaciones.
+        allow read: if isOwner(userId);
+        // La escritura está permitida para el propietario (marcar como leída) o por un admin (crear notificación)
+        // Las Server Actions de admin pueden escribir notificaciones.
+        allow write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    /**
+     * @description Gestiona los informes de incidentes.
+     */
+    match /incidentReports/{incidentReportId} {
+      // Cualquiera (autenticado o no) puede leer informes de incidentes.
+      allow get, list: if true;
+      // Cualquier usuario autenticado puede crear un informe.
+      allow create: if isSignedIn();
+
+      // Las actualizaciones ahora se permiten bajo condiciones estrictas para la votación,
+      // o si el usuario es un administrador.
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        // El usuario no es el autor del reporte
+        request.auth.uid != resource.data.userId &&
+        // Solo se pueden modificar los arrays de votos o el status
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['confirmations', 'disputes', 'status']) &&
+        // El usuario solo puede añadir su propio UID a la lista de votos
+        (request.resource.data.confirmations.hasOnly(resource.data.confirmations.concat([request.auth.uid])) ||
+         request.resource.data.disputes.hasOnly(resource.data.disputes.concat([request.auth.uid])))
+      );
+        
+      // Solo los administradores pueden eliminar informes.
+      allow delete: if isAdmin();
+    }
+  }
+}

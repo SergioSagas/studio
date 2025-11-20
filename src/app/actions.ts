@@ -18,26 +18,6 @@ import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
 import * as admin from 'firebase-admin';
 
-// --- Firebase Admin SDK Initialization ---
-const VOTE_THRESHOLD = 3;
-function getAdminApp() {
-  const appName = 'firebase-admin-app-server-actions';
-  
-  if (admin.apps.some(app => app?.name === appName)) {
-    return admin.app(appName);
-  }
-  
-  try {
-      return admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
-    }, appName);
-  } catch (error) {
-    console.error("Firebase admin initialization error:", error);
-    // Re-throw or handle as appropriate. If this fails, subsequent Firestore operations will fail.
-    throw new Error("Failed to initialize Firebase Admin SDK. Server-side actions will not work.");
-  }
-};
-
 // Report Analysis Action
 const reportSchema = z.object({
   reportText: z
@@ -189,6 +169,22 @@ export async function fetchCrimePatternsAction(
 }
 
 
+function getAdminApp() {
+    const appName = 'firebase-admin-app-server-actions';
+    const existingApp = admin.apps.find(app => app?.name === appName);
+    if (existingApp) {
+        return existingApp;
+    }
+    try {
+        return admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+        }, appName);
+    } catch (error: any) {
+        console.error("Firebase admin initialization error:", error.message);
+        throw new Error("Failed to initialize Firebase Admin SDK. Server-side actions will not work.");
+    }
+}
+
 // Server action to send real-time alerts. This action is secure.
 export async function sendRealTimeAlertsAction(input: {
   reportId: string;
@@ -196,12 +192,12 @@ export async function sendRealTimeAlertsAction(input: {
   riskLevel: 'medium' | 'high';
   incidentType: string;
 }): Promise<{ status: 'success' | 'error'; message: string; notifiedCount: number }> {
-    const adminApp = getAdminApp();
-    const firestore = adminApp.firestore();
-    const { location, riskLevel, incidentType } = input;
-    let notifiedCount = 0;
-
     try {
+        const adminApp = getAdminApp();
+        const firestore = adminApp.firestore();
+        const { location, riskLevel, incidentType } = input;
+        let notifiedCount = 0;
+
         const batch = firestore.batch();
         const usersRef = firestore.collection('users');
 
@@ -240,7 +236,9 @@ export async function sendRealTimeAlertsAction(input: {
             }
         });
 
-        await batch.commit();
+        if (notifiedCount > 0) {
+            await batch.commit();
+        }
 
         revalidatePath('/alerts');
         return { status: 'success', message: 'Alerts sent.', notifiedCount };
@@ -248,136 +246,5 @@ export async function sendRealTimeAlertsAction(input: {
     } catch (error: any) {
         console.error("Failed to send real-time alerts:", error);
         return { status: 'error', message: error.message || 'Could not send alerts.', notifiedCount: 0 };
-    }
-}
-
-
-// --- Reputation and Voting Logic ---
-type ActionStateSimple = {
-  status: 'success' | 'error';
-  message: string;
-};
-
-export async function castVoteAction(input: {
-  reportId: string;
-  voteType: 'confirm' | 'dispute';
-  actionUserId: string;
-  authorId: string;
-}): Promise<ActionStateSimple> {
-  const adminApp = getAdminApp();
-  const firestore = adminApp.firestore();
-  const { reportId, voteType, actionUserId, authorId } = input;
-
-  try {
-    const reportRef = firestore.collection('incidentReports').doc(reportId);
-    
-    await firestore.runTransaction(async (transaction) => {
-      const reportDoc = await transaction.get(reportRef);
-      if (!reportDoc.exists) {
-        throw new Error("Reporte no encontrado.");
-      }
-      
-      const reportData = reportDoc.data() as IncidentReport;
-      const confirmations = reportData.confirmations || [];
-      const disputes = reportData.disputes || [];
-
-      if (confirmations.includes(actionUserId) || disputes.includes(actionUserId)) {
-        // User has already voted, do nothing.
-        return;
-      }
-
-      const updates: { [key: string]: any } = {};
-      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
-      const currentVotes = reportData[voteField] || [];
-      updates[voteField] = [...currentVotes, actionUserId];
-      
-      transaction.update(reportRef, updates);
-      
-      const newConfirmationsCount = voteType === 'confirm' ? updates[voteField].length : confirmations.length;
-      const newDisputesCount = voteType === 'dispute' ? updates[voteField].length : disputes.length;
-      
-      let newStatus: IncidentReport['status'] | null = null;
-      let reputationChange = 0;
-      let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
-      
-      if (newConfirmationsCount >= VOTE_THRESHOLD) {
-        newStatus = 'confirmed';
-        reputationChange = 1;
-        notificationType = 'report_confirmed';
-      } else if (newDisputesCount >= VOTE_THRESHOLD) {
-        newStatus = 'disputed';
-        reputationChange = -1;
-        notificationType = 'report_disputed';
-      }
-      
-      if (newStatus && notificationType) {
-        const authorRef = firestore.collection('users').doc(authorId);
-        transaction.update(reportRef, { status: newStatus });
-        transaction.update(authorRef, { reputation: admin.firestore.FieldValue.increment(reputationChange) });
-        
-        const notificationRef = authorRef.collection('notifications').doc();
-        const message = newStatus === 'confirmed' ? 'Tu reporte ha sido confirmado por la comunidad.' : 'Tu reporte ha sido disputado por la comunidad.';
-        transaction.set(notificationRef, {
-            message,
-            type: notificationType,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-            userId: authorId
-        });
-      }
-    });
-
-    revalidatePath('/');
-    revalidatePath('/alerts');
-    return { status: 'success', message: 'Voto registrado.' };
-  } catch (error: any) {
-    console.error("Vote casting failed:", error);
-    return { status: 'error', message: error.message || "No se pudo registrar el voto." };
-  }
-}
-
-
-export async function handleAdminReportAction(input: {
-  reportId: string;
-  newStatus: 'confirmed' | 'false';
-  adminId: string;
-  authorId: string;
-}): Promise<ActionStateSimple> {
-    const adminApp = getAdminApp();
-    const firestore = adminApp.firestore();
-    const { reportId, newStatus, authorId } = input;
-
-    try {
-        const batch = firestore.batch();
-        const reportRef = firestore.collection('incidentReports').doc(reportId);
-        const authorRef = firestore.collection('users').doc(authorId);
-
-        batch.update(reportRef, { status: newStatus });
-
-        const reputationChange = newStatus === 'confirmed' ? 1 : -2;
-        batch.update(authorRef, { reputation: admin.firestore.FieldValue.increment(reputationChange) });
-        
-        const notificationMessage = newStatus === 'confirmed'
-            ? `Un administrador ha confirmado tu reporte.`
-            : `Un administrador marcó tu reporte como falso.`;
-
-        const notificationRef = firestore.collection('users').doc(authorId).collection('notifications').doc();
-        batch.set(notificationRef, {
-            message: notificationMessage,
-            type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            read: false,
-            userId: authorId
-        });
-        
-        await batch.commit();
-        
-        revalidatePath('/');
-        revalidatePath('/alerts');
-        
-        return { status: 'success', message: 'Acción completada.' };
-    } catch (error: any) {
-        console.error("Admin action failed:", error);
-        return { status: 'error', message: error.message || "No se pudo completar la acción de administrador." };
     }
 }

@@ -39,7 +39,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, doc, query, orderBy, limit, writeBatch, increment } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -48,8 +48,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
-import { castVoteAction, handleAdminReportAction } from '@/app/actions';
 
+const VOTE_THRESHOLD = 3;
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -100,19 +100,36 @@ export default function DashboardPage() {
   const [isActionPending, setIsActionPending] = useState<string | null>(null);
 
   const handleAdminAction = async (report: IncidentReport, newStatus: 'confirmed' | 'false') => {
-    if (!user) return;
+    if (!user || !firestore) return;
     setIsActionPending(report.id);
     
     try {
-      await handleAdminReportAction({
-        reportId: report.id,
-        newStatus: newStatus,
-        adminId: user.uid,
-        authorId: report.userId,
-      });
+        const batch = writeBatch(firestore);
+        const reportRef = doc(firestore, 'incidentReports', report.id);
+        const authorRef = doc(firestore, 'users', report.userId);
 
-      toast({ title: 'Acción completada', description: `Reporte marcado como ${newStatus}.` });
+        batch.update(reportRef, { status: newStatus });
+
+        const reputationChange = newStatus === 'confirmed' ? 1 : -2;
+        batch.update(authorRef, { reputation: increment(reputationChange) });
+        
+        const notificationMessage = newStatus === 'confirmed'
+            ? `Un administrador ha confirmado tu reporte.`
+            : `Un administrador marcó tu reporte como falso.`;
+
+        const notificationRef = doc(collection(authorRef, 'notifications'));
+        batch.set(notificationRef, {
+            message: notificationMessage,
+            type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
+            timestamp: new Date(),
+            read: false,
+            userId: report.userId
+        });
+        
+        await batch.commit();
+        toast({ title: 'Acción completada', description: `Reporte marcado como ${newStatus}.` });
     } catch (error: any) {
+      console.error("Admin action failed:", error);
       toast({ variant: 'destructive', title: 'Error en la acción', description: error.message });
     } finally {
       setIsActionPending(null);
@@ -120,19 +137,52 @@ export default function DashboardPage() {
   };
   
   const handleUserVote = async (report: IncidentReport, voteType: 'confirm' | 'dispute') => {
-    if (!user) return;
+    if (!user || !firestore) return;
     setIsActionPending(report.id);
     
     try {
-      await castVoteAction({
-        reportId: report.id,
-        voteType: voteType,
-        actionUserId: user.uid,
-        authorId: report.userId,
-      });
+        const batch = writeBatch(firestore);
+        const reportRef = doc(firestore, 'incidentReports', report.id);
 
-      toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
+        const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+        const currentVotes = Array.isArray(report[voteField]) ? report[voteField] : [];
+        const newVotes = [...currentVotes, user.uid];
+
+        batch.update(reportRef, { [voteField]: newVotes });
+
+        let newStatus: IncidentReport['status'] | null = null;
+        let reputationChange = 0;
+        let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
+        const authorRef = doc(firestore, 'users', report.userId);
+
+        if (voteType === 'confirm' && newVotes.length >= VOTE_THRESHOLD) {
+            newStatus = 'confirmed';
+            reputationChange = 1;
+            notificationType = 'report_confirmed';
+        } else if (voteType === 'dispute' && newVotes.length >= VOTE_THRESHOLD) {
+            newStatus = 'disputed';
+            reputationChange = -1;
+            notificationType = 'report_disputed';
+        }
+
+        if (newStatus) {
+            batch.update(reportRef, { status: newStatus });
+            batch.update(authorRef, { reputation: increment(reputationChange) });
+            const message = newStatus === 'confirmed' ? 'Tu reporte ha sido confirmado por la comunidad.' : 'Tu reporte ha sido disputado por la comunidad.';
+            const notificationRef = doc(collection(authorRef, 'notifications'));
+            batch.set(notificationRef, {
+                message,
+                type: notificationType,
+                timestamp: new Date(),
+                read: false,
+                userId: report.userId
+            });
+        }
+        
+        await batch.commit();
+        toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
     } catch (error: any) {
+      console.error("Vote failed:", error);
       toast({ variant: 'destructive', title: 'Error al votar', description: error.message });
     } finally {
       setIsActionPending(null);
@@ -275,7 +325,6 @@ export default function DashboardPage() {
                   <TableBody>
                     {highPriorityIncidents?.map((report) => {
                       const isOwner = user?.uid === report.userId;
-                      // Defensive check: ensure confirmations/disputes are arrays.
                       const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
                       const disputes = Array.isArray(report.disputes) ? report.disputes : [];
                       const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');

@@ -21,11 +21,10 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy, doc, arrayUnion, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, orderBy, doc, writeBatch, increment } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { castVoteAction } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 
 
@@ -55,19 +54,51 @@ function AlertCard({ report }: { report: IncidentReport }) {
     setIsVoting(true);
 
     try {
-      // Call the server action to handle the complex logic
-      await castVoteAction({
-        reportId: report.id,
-        voteType: voteType,
-        actionUserId: user.uid,
-        authorId: report.userId
-      });
-      
-      toast({
-        title: 'Voto Registrado',
-        description: 'Tu voto ha sido registrado con éxito.',
-      });
+        const batch = writeBatch(firestore);
+        const reportRef = doc(firestore, 'incidentReports', report.id);
+
+        const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+        const currentVotes = Array.isArray(report[voteField]) ? report[voteField] : [];
+        const newVotes = [...currentVotes, user.uid];
+
+        batch.update(reportRef, { [voteField]: newVotes });
+
+        let newStatus: IncidentReport['status'] | null = null;
+        let reputationChange = 0;
+        let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
+        const authorRef = doc(firestore, 'users', report.userId);
+
+        if (voteType === 'confirm' && newVotes.length >= VOTE_THRESHOLD) {
+            newStatus = 'confirmed';
+            reputationChange = 1;
+            notificationType = 'report_confirmed';
+        } else if (voteType === 'dispute' && newVotes.length >= VOTE_THRESHOLD) {
+            newStatus = 'disputed';
+            reputationChange = -1;
+            notificationType = 'report_disputed';
+        }
+
+        if (newStatus) {
+            batch.update(reportRef, { status: newStatus });
+            batch.update(authorRef, { reputation: increment(reputationChange) });
+            const message = newStatus === 'confirmed' ? 'Tu reporte ha sido confirmado por la comunidad.' : 'Tu reporte ha sido disputado por la comunidad.';
+            const notificationRef = doc(collection(authorRef, 'notifications'));
+            batch.set(notificationRef, {
+                message,
+                type: notificationType,
+                timestamp: new Date(),
+                read: false,
+                userId: report.userId
+            });
+        }
+        
+        await batch.commit();
+        toast({
+            title: 'Voto Registrado',
+            description: 'Tu voto ha sido registrado con éxito.',
+        });
     } catch (error: any) {
+      console.error("Vote failed:", error);
       toast({
         variant: 'destructive',
         title: 'Error al Votar',
@@ -79,7 +110,6 @@ function AlertCard({ report }: { report: IncidentReport }) {
   };
 
   const isOwner = user?.uid === report.userId;
-  // Defensive check: ensure confirmations/disputes are arrays.
   const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
   const disputes = Array.isArray(report.disputes) ? report.disputes : [];
   const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
