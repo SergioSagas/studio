@@ -21,7 +21,7 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy, doc, arrayUnion, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, arrayUnion, writeBatch, getDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -51,26 +51,55 @@ function AlertCard({ report }: { report: IncidentReport }) {
 
   const handleVote = async (voteType: 'confirm' | 'dispute') => {
     if (!user || !firestore) return;
-    
+
     setIsVoting(true);
 
     try {
-      // Client-side optimistic update: just add the vote
       const reportRef = doc(firestore, 'incidentReports', report.id);
-      await writeBatch(firestore).update(reportRef, {
-        [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
-      }).commit();
-      
-      // Server-side action for complex logic
-      const actionResult = await castVoteAction({
-        reportId: report.id,
-        voteType: voteType,
-        actionUserId: user.uid,
-      });
+      const authorRef = doc(firestore, 'users', report.userId);
+      const batch = writeBatch(firestore);
 
-      if (actionResult.status === 'error') {
-        throw new Error(actionResult.message);
+      // 1. Add user's vote
+      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+      batch.update(reportRef, { [voteField]: arrayUnion(user.uid) });
+
+      // 2. Check if the threshold is met to change status
+      const confirmationsCount = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
+      const disputesCount = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
+
+      let newStatus: IncidentReport['status'] | null = null;
+      let reputationChange = 0;
+
+      if (confirmationsCount >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+      } else if (disputesCount >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
       }
+
+      if (newStatus) {
+        batch.update(reportRef, { status: newStatus });
+        // Apply reputation change
+        batch.update(authorRef, { reputation: increment(reputationChange) });
+        // Create notification for the author
+        const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
+        const notificationMessage = newStatus === 'confirmed'
+            ? `Tu reporte ha sido confirmado por la comunidad.`
+            : `Tu reporte ha sido disputado por la comunidad.`;
+        batch.set(notificationRef, {
+            message: notificationMessage,
+            type: newStatus === 'confirmed' ? 'report_confirmed' : 'report_disputed',
+            timestamp: serverTimestamp(),
+            read: false,
+            userId: report.userId
+        });
+      }
+      
+      await batch.commit();
+
+      // Call server action just for revalidation, not for logic
+      await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
       
       toast({
         title: 'Voto Registrado',
@@ -101,6 +130,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
         case 'confirmed': return 'Confirmado';
         case 'disputed': return 'Disputado';
         case 'false': return 'Falso';
+        case 'unverified':
         default: return 'Sin verificar';
     }
   }

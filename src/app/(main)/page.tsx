@@ -39,7 +39,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
+import { collection, doc, query, orderBy, limit, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -106,37 +106,33 @@ export default function DashboardPage() {
     setIsActionPending(report.id);
     
     try {
-      const actionResult = await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
-      if (actionResult.status === 'error') {
-        throw new Error(actionResult.message);
-      }
-      
       const reportRef = doc(firestore, 'incidentReports', report.id);
       const authorRef = doc(firestore, 'users', report.userId);
       const batch = writeBatch(firestore);
 
       batch.update(reportRef, { status: newStatus });
       
-      let reputationChange = 0;
-
-      if (newStatus === 'confirmed' && report.status !== 'confirmed') {
-          reputationChange = 1;
-      } else if (newStatus === 'false' && report.status !== 'false') {
-          reputationChange = -2;
-      }
+      const reputationChange = newStatus === 'confirmed' ? 1 : -2;
+      batch.update(authorRef, { reputation: increment(reputationChange) });
       
-      if (reputationChange !== 0) {
-        const authorDoc = await getDoc(authorRef);
-        const authorProfile = authorDoc.data();
-        if (authorProfile) {
-          const newReputation = (authorProfile.reputation || 10) + reputationChange;
-          batch.update(authorRef, { reputation: newReputation });
-        }
-      }
+      const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
+      const notificationMessage = newStatus === 'confirmed'
+        ? `Un administrador ha confirmado tu reporte.`
+        : `Un administrador marcó tu reporte como falso.`;
 
+      batch.set(notificationRef, {
+          message: notificationMessage,
+          type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
+          timestamp: serverTimestamp(),
+          read: false,
+          userId: report.userId
+      });
+      
       await batch.commit();
 
-      toast({ title: 'Acción completada', description: actionResult.message });
+      await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
+
+      toast({ title: 'Acción completada', description: `Reporte marcado como ${newStatus}.` });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error en la acción', description: error.message });
     } finally {
@@ -150,14 +146,45 @@ export default function DashboardPage() {
     
     try {
       const reportRef = doc(firestore, 'incidentReports', report.id);
-      await writeBatch(firestore).update(reportRef, {
-        [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
-      }).commit();
+      const authorRef = doc(firestore, 'users', report.userId);
+      const batch = writeBatch(firestore);
 
-      const actionResult = await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
-      if (actionResult.status === 'error') {
-        throw new Error(actionResult.message);
+      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+      batch.update(reportRef, { [voteField]: increment(1) });
+      
+      const confirmationsCount = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
+      const disputesCount = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
+
+      let newStatus: IncidentReport['status'] | null = null;
+      let reputationChange = 0;
+
+      if (confirmationsCount >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+      } else if (disputesCount >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
       }
+
+      if (newStatus) {
+        batch.update(reportRef, { status: newStatus });
+        batch.update(authorRef, { reputation: increment(reputationChange) });
+        const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
+        const notificationMessage = newStatus === 'confirmed'
+            ? `Tu reporte ha sido confirmado por la comunidad.`
+            : `Tu reporte ha sido disputado por la comunidad.`;
+        batch.set(notificationRef, {
+            message: notificationMessage,
+            type: newStatus === 'confirmed' ? 'report_confirmed' : 'report_disputed',
+            timestamp: serverTimestamp(),
+            read: false,
+            userId: report.userId
+        });
+      }
+
+      await batch.commit();
+      
+      await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
 
       toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
     } catch (error: any) {
@@ -314,6 +341,7 @@ export default function DashboardPage() {
                             case 'confirmed': return 'Confirmado';
                             case 'disputed': return 'Disputado';
                             case 'false': return 'Falso';
+                            case 'unverified':
                             default: return 'Sin verificar';
                         }
                       }
