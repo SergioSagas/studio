@@ -259,7 +259,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {highPriorityIncidents?.map((report) => {
                       const isOwner = user?.uid === report.userId;
-                      const hasVoted = report.confirmations.includes(user?.uid ?? '') || report.disputes.includes(user?.uid ?? '');
+                      const hasVoted = (report.confirmations || []).includes(user?.uid ?? '') || (report.disputes || []).includes(user?.uid ?? '');
                       const canVote = !isOwner && !hasVoted;
 
                       return (
@@ -331,7 +331,7 @@ export default function DashboardPage() {
                                         <ThumbsUp className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent><p>Confirmar ({report.confirmations.length})</p></TooltipContent>
+                                    <TooltipContent><p>Confirmar ({(report.confirmations || []).length})</p></TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -339,7 +339,7 @@ export default function DashboardPage() {
                                         <ThumbsDown className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent><p>Disputar ({report.disputes.length})</p></TooltipContent>
+                                    <TooltipContent><p>Disputar ({(report.disputes || []).length})</p></TooltipContent>
                                   </Tooltip>
                                 </>
                               )}

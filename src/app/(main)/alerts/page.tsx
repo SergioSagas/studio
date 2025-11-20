@@ -46,8 +46,8 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const { role } = useUserRole();
 
   const isOwner = user?.uid === report.userId;
-  const hasConfirmed = report.confirmations.includes(user?.uid ?? '');
-  const hasDisputed = report.disputes.includes(user?.uid ?? '');
+  const hasConfirmed = (report.confirmations || []).includes(user?.uid ?? '');
+  const hasDisputed = (report.disputes || []).includes(user?.uid ?? '');
   const canVote = !isOwner && !hasConfirmed && !hasDisputed;
 
   const handleConfirm = async () => {
@@ -119,11 +119,11 @@ function AlertCard({ report }: { report: IncidentReport }) {
             <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleConfirm} disabled={!canVote} aria-label="Confirmar">
                   <ThumbsUp className="size-4 mr-2" />
-                  {report.confirmations?.length || 0}
+                  {(report.confirmations || []).length || 0}
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleDispute} disabled={!canVote} aria-label="Disputar">
                   <ThumbsDown className="size-4 mr-2" />
-                  {report.disputes?.length || 0}
+                  {(report.disputes || []).length || 0}
                 </Button>
             </div>
              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
