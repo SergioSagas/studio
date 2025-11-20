@@ -37,8 +37,8 @@ import { PageHeader } from '@/components/page-header';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc, query, orderBy, limit, arrayUnion } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -47,7 +47,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
-import { confirmIncidentAction, disputeIncidentAction } from '@/app/actions';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -164,24 +163,28 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
-  const handleConfirm = async (reportId: string, isAdminAction: boolean) => {
-    if (!user) return;
-    const result = await confirmIncidentAction(reportId, user.uid, isAdminAction);
-    if (result?.status === 'error') {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
-    } else {
-      toast({ title: 'Acción completada', description: 'El reporte ha sido actualizado.' });
-    }
+  const handleAdminAction = (reportId: string, status: 'confirmed' | 'false') => {
+    if (!firestore || role !== 'admin') return;
+    const incidentRef = doc(firestore, 'incidentReports', reportId);
+    updateDocumentNonBlocking(incidentRef, { status });
+    toast({
+      title: 'Reporte Actualizado',
+      description: `El estado del reporte se ha cambiado a ${status}.`,
+    });
   };
 
-  const handleDispute = async (reportId: string, isAdminAction: boolean) => {
-    if (!user) return;
-    const result = await disputeIncidentAction(reportId, user.uid, isAdminAction);
-    if (result?.status === 'error') {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
-    } else {
-      toast({ title: 'Acción completada', description: 'El reporte ha sido actualizado.' });
-    }
+  const handleUserVote = (reportId: string, voteType: 'confirm' | 'dispute') => {
+    if (!user || !firestore) return;
+    const incidentRef = doc(firestore, 'incidentReports', reportId);
+    const updateData = voteType === 'confirm'
+      ? { confirmations: arrayUnion(user.uid) }
+      : { disputes: arrayUnion(user.uid) };
+    
+    updateDocumentNonBlocking(incidentRef, updateData);
+    toast({
+      title: 'Voto Registrado',
+      description: 'Gracias por tu feedback.',
+    });
   };
 
   return (
@@ -304,7 +307,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleConfirm(report.id, true)}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'confirmed')}>
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -312,7 +315,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleDispute(report.id, true)}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'false')}>
                                         <XCircle className="h-4 w-4 text-red-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -329,7 +332,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleConfirm(report.id, false)}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleUserVote(report.id, 'confirm')}>
                                         <ThumbsUp className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
@@ -337,7 +340,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleDispute(report.id, false)}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleUserVote(report.id, 'dispute')}>
                                         <ThumbsDown className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>

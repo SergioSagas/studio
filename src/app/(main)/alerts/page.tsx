@@ -19,13 +19,11 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { confirmIncidentAction, disputeIncidentAction } from '@/app/actions';
-
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -41,6 +39,7 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
 
 function AlertCard({ report }: { report: IncidentReport }) {
   const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
 
   const isOwner = user?.uid === report.userId;
@@ -48,38 +47,20 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const hasDisputed = (report.disputes || []).includes(user?.uid ?? '');
   const canVote = user && !isOwner && !hasConfirmed && !hasDisputed;
 
-  const handleConfirm = async () => {
-    if (!user) return;
-    const result = await confirmIncidentAction(report.id, user.uid);
-    if (result?.status === 'error') {
-      toast({
-        variant: 'destructive',
-        title: 'Error al confirmar',
-        description: result.message,
-      });
-    } else {
-      toast({
-        title: 'Reporte Confirmado',
-        description: 'Gracias por tu feedback.',
-      });
-    }
-  };
+  const handleVote = (voteType: 'confirm' | 'dispute') => {
+    if (!user || !firestore || !canVote) return;
 
-  const handleDispute = async () => {
-    if (!user) return;
-    const result = await disputeIncidentAction(report.id, user.uid);
-    if (result?.status === 'error') {
-      toast({
-        variant: 'destructive',
-        title: 'Error al disputar',
-        description: result.message,
-      });
-    } else {
-      toast({
-        title: 'Reporte Disputado',
-        description: 'Gracias por tu feedback.',
-      });
-    }
+    const incidentRef = doc(firestore, 'incidentReports', report.id);
+    const updateData = voteType === 'confirm' 
+      ? { confirmations: arrayUnion(user.uid) }
+      : { disputes: arrayUnion(user.uid) };
+
+    updateDocumentNonBlocking(incidentRef, updateData);
+
+    toast({
+      title: `Reporte ${voteType === 'confirm' ? 'Confirmado' : 'Disputado'}`,
+      description: 'Gracias por tu feedback.',
+    });
   };
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
@@ -117,11 +98,11 @@ function AlertCard({ report }: { report: IncidentReport }) {
         {user && (
           <div className="flex w-full items-center justify-between">
             <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleConfirm} disabled={!canVote} aria-label="Confirmar">
+                <Button variant="outline" size="sm" onClick={() => handleVote('confirm')} disabled={!canVote} aria-label="Confirmar">
                   <ThumbsUp className="size-4 mr-2" />
                   {(report.confirmations || []).length || 0}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleDispute} disabled={!canVote} aria-label="Disputar">
+                <Button variant="outline" size="sm" onClick={() => handleVote('dispute')} disabled={!canVote} aria-label="Disputar">
                   <ThumbsDown className="size-4 mr-2" />
                   {(report.disputes || []).length || 0}
                 </Button>

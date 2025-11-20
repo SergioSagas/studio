@@ -16,7 +16,12 @@ service cloud.firestore {
 
     // Helper function to check if the user is an admin
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
+    }
+
+    // Helper function to get user data
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
     // Helper function to check if the user is the owner of a document
@@ -26,41 +31,77 @@ service cloud.firestore {
 
     /**
      * @description Manages user profile data, allowing users to read and write their own profiles.
-     * @path /users/{userId}
-     * @allow (create) - User 'abc' can create their profile if authenticated as 'abc'.
-     * @allow (get) - User 'abc' can read their own profile if authenticated as 'abc'.
-     * @allow (update) - User 'abc' can update their profile if authenticated as 'abc'.
-     * @deny (create) - User 'def' cannot create a profile for user 'abc'.
-     * @deny (update) - User 'def' cannot update the profile of user 'abc'.
-     * @principle Enforces document ownership for writes, allowing users to manage their own data.
      */
     match /users/{userId} {
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow get: if isOwner(userId);
       allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if false; // Deletion not allowed in this phase.
-      allow list: if false; // Disable user listing
+      allow delete: if false; 
+      allow list: if false;
+
+      // Reputation can only be changed by +1 or -1, not set arbitrarily
+      allow update: if isOwner(userId) && 
+                      (request.resource.data.reputation == resource.data.reputation + 1 || 
+                       request.resource.data.reputation == resource.data.reputation - 1);
     }
 
     /**
-     * @description Manages incident reports, allowing public read access but restricting modifications to admins.
-     * @path /incidentReports/{incidentReportId}
-     * @allow (get) - Any user can read an incident report.
-     * @allow (list) - Any user can list incident reports.
-     * @allow (create) - Admin user 'admin_abc' can create a new incident report.
-     * @allow (update) - Admin user 'admin_abc' can update an existing incident report.
-     * @allow (delete) - Admin user 'admin_abc' can delete an existing incident report.
-     * @deny (create) - Regular user cannot create an incident report.
-     * @deny (update) - Regular user cannot update an incident report.
-     * @deny (delete) - Regular user cannot delete an incident report.
-     * @principle Allows public read access with owner-only (admin) writes.
+     * @description Manages incident reports, with community and admin validation logic.
      */
     match /incidentReports/{incidentReportId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create: if isSignedIn(); // Any signed-in user can create a report
+
+      // UPDATE LOGIC
+      allow update: if isSignedIn() && 
+                      (
+                        // Case 1: Admin is updating any field (except votes)
+                        (isAdmin() && !isChangingVotes()) ||
+                        // Case 2: A user is casting a vote (confirming/disputing)
+                        isCastingVote()
+                      );
+
+      allow delete: if isAdmin();
+      
+      // Helper: checks if a user is adding themselves to confirmations/disputes
+      function isCastingVote() {
+        let reportBefore = resource.data;
+        let reportAfter = request.resource.data;
+        let userId = request.auth.uid;
+        
+        // Cannot vote on your own report
+        if (reportBefore.userId == userId) {
+          return false;
+        }
+        
+        // Cannot vote twice
+        if (reportBefore.confirmations.hasAny([userId]) || reportBefore.disputes.hasAny([userId])) {
+          return false;
+        }
+        
+        // Check if only one vote is being added
+        let isConfirming = reportAfter.confirmations == reportBefore.confirmations.concat([userId]) && reportAfter.disputes == reportBefore.disputes;
+        let isDisputing = reportAfter.disputes == reportBefore.disputes.concat([userId]) && reportAfter.confirmations == reportBefore.confirmations;
+
+        // Ensure other fields are not changed
+        let otherFieldsUnchanged = reportAfter.incidentType == reportBefore.incidentType &&
+                                   reportAfter.riskLevel == reportBefore.riskLevel &&
+                                   reportAfter.summary == reportBefore.summary &&
+                                   reportAfter.description == reportబోట్నెంట్.description &&
+                                   reportAfter.location == reportBefore.location;
+                                   
+        return (isConfirming || isDisputing) && otherFieldsUnchanged;
+      }
+      
+      // Helper: checks if the admin is trying to change vote arrays
+      function isChangingVotes() {
+        let reportBefore = resource.data;
+        let reportAfter = request.resource.data;
+        return reportAfter.confirmations != reportBefore.confirmations || reportAfter.disputes != reportBefore.disputes;
+      }
+
+      // TODO: Implement reputation change logic using Cloud Functions Triggers,
+      // as security rules cannot trigger writes to other documents.
     }
   }
 }
