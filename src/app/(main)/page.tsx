@@ -39,7 +39,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -90,8 +90,6 @@ function StatCard({
   );
 }
 
-const VOTE_THRESHOLD = 3;
-
 export default function DashboardPage() {
   const { user } = useUser();
   const { role } = useUserRole();
@@ -102,35 +100,16 @@ export default function DashboardPage() {
   const [isActionPending, setIsActionPending] = useState<string | null>(null);
 
   const handleAdminAction = async (report: IncidentReport, newStatus: 'confirmed' | 'false') => {
-    if (!user || !firestore) return;
+    if (!user) return;
     setIsActionPending(report.id);
     
     try {
-      const reportRef = doc(firestore, 'incidentReports', report.id);
-      const authorRef = doc(firestore, 'users', report.userId);
-      const batch = writeBatch(firestore);
-
-      batch.update(reportRef, { status: newStatus });
-      
-      const reputationChange = newStatus === 'confirmed' ? 1 : -2;
-      batch.update(authorRef, { reputation: increment(reputationChange) });
-      
-      const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
-      const notificationMessage = newStatus === 'confirmed'
-        ? `Un administrador ha confirmado tu reporte.`
-        : `Un administrador marcó tu reporte como falso.`;
-
-      batch.set(notificationRef, {
-          message: notificationMessage,
-          type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
-          timestamp: serverTimestamp(),
-          read: false,
-          userId: report.userId
+      await handleAdminReportAction({
+        reportId: report.id,
+        newStatus: newStatus,
+        adminId: user.uid,
+        authorId: report.userId,
       });
-      
-      await batch.commit();
-
-      await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
 
       toast({ title: 'Acción completada', description: `Reporte marcado como ${newStatus}.` });
     } catch (error: any) {
@@ -141,50 +120,16 @@ export default function DashboardPage() {
   };
   
   const handleUserVote = async (report: IncidentReport, voteType: 'confirm' | 'dispute') => {
-    if (!user || !firestore) return;
+    if (!user) return;
     setIsActionPending(report.id);
     
     try {
-      const reportRef = doc(firestore, 'incidentReports', report.id);
-      const authorRef = doc(firestore, 'users', report.userId);
-      const batch = writeBatch(firestore);
-
-      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
-      batch.update(reportRef, { [voteField]: increment(1) });
-      
-      const confirmationsCount = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
-      const disputesCount = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
-
-      let newStatus: IncidentReport['status'] | null = null;
-      let reputationChange = 0;
-
-      if (confirmationsCount >= VOTE_THRESHOLD) {
-        newStatus = 'confirmed';
-        reputationChange = 1;
-      } else if (disputesCount >= VOTE_THRESHOLD) {
-        newStatus = 'disputed';
-        reputationChange = -1;
-      }
-
-      if (newStatus) {
-        batch.update(reportRef, { status: newStatus });
-        batch.update(authorRef, { reputation: increment(reputationChange) });
-        const notificationRef = doc(collection(firestore, 'users', report.userId, 'notifications'));
-        const notificationMessage = newStatus === 'confirmed'
-            ? `Tu reporte ha sido confirmado por la comunidad.`
-            : `Tu reporte ha sido disputado por la comunidad.`;
-        batch.set(notificationRef, {
-            message: notificationMessage,
-            type: newStatus === 'confirmed' ? 'report_confirmed' : 'report_disputed',
-            timestamp: serverTimestamp(),
-            read: false,
-            userId: report.userId
-        });
-      }
-
-      await batch.commit();
-      
-      await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
+      await castVoteAction({
+        reportId: report.id,
+        voteType: voteType,
+        actionUserId: user.uid,
+        authorId: report.userId,
+      });
 
       toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
     } catch (error: any) {

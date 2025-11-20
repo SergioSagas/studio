@@ -19,18 +19,23 @@ import { cityData } from '@/lib/city-layout';
 import * as admin from 'firebase-admin';
 
 // --- Firebase Admin SDK Initialization ---
+const VOTE_THRESHOLD = 3;
 function getAdminApp() {
   const appName = 'firebase-admin-app-server-actions';
   
-  // Evitar reinicializar la app
   if (admin.apps.some(app => app?.name === appName)) {
     return admin.app(appName);
   }
   
-  // Las credenciales se toman automáticamente de las variables de entorno en App Hosting
-  return admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-  }, appName);
+  try {
+      return admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+    }, appName);
+  } catch (error) {
+    console.error("Firebase admin initialization error:", error);
+    // Re-throw or handle as appropriate. If this fails, subsequent Firestore operations will fail.
+    throw new Error("Failed to initialize Firebase Admin SDK. Server-side actions will not work.");
+  }
 };
 
 // Report Analysis Action
@@ -253,14 +258,80 @@ type ActionStateSimple = {
   message: string;
 };
 
-// Simplified action just for revalidation
 export async function castVoteAction(input: {
   reportId: string;
   voteType: 'confirm' | 'dispute';
   actionUserId: string;
-}): Promise<void> {
+  authorId: string;
+}): Promise<ActionStateSimple> {
+  const adminApp = getAdminApp();
+  const firestore = adminApp.firestore();
+  const { reportId, voteType, actionUserId, authorId } = input;
+
+  try {
+    const reportRef = firestore.collection('incidentReports').doc(reportId);
+    const authorRef = firestore.collection('users').doc(authorId);
+    
+    await firestore.runTransaction(async (transaction) => {
+      const reportDoc = await transaction.get(reportRef);
+      if (!reportDoc.exists) {
+        throw new Error("Reporte no encontrado.");
+      }
+      
+      const reportData = reportDoc.data() as IncidentReport;
+      const confirmations = reportData.confirmations || [];
+      const disputes = reportData.disputes || [];
+
+      if (confirmations.includes(actionUserId) || disputes.includes(actionUserId)) {
+        // User has already voted, do nothing.
+        return;
+      }
+      
+      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+      const newVoteArray = voteType === 'confirm' ? [...confirmations, actionUserId] : [...disputes, actionUserId];
+      
+      transaction.update(reportRef, { [voteField]: newVoteArray });
+      
+      const newConfirmationsCount = voteType === 'confirm' ? newVoteArray.length : confirmations.length;
+      const newDisputesCount = voteType === 'dispute' ? newVoteArray.length : disputes.length;
+
+      let newStatus: IncidentReport['status'] | null = null;
+      let reputationChange = 0;
+      let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
+      
+      if (newConfirmationsCount >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+        notificationType = 'report_confirmed';
+      } else if (newDisputesCount >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
+        notificationType = 'report_disputed';
+      }
+      
+      if (newStatus && notificationType) {
+        transaction.update(reportRef, { status: newStatus });
+        transaction.update(authorRef, { reputation: admin.firestore.FieldValue.increment(reputationChange) });
+        
+        const notificationRef = authorRef.collection('notifications').doc();
+        const message = newStatus === 'confirmed' ? 'Tu reporte ha sido confirmado por la comunidad.' : 'Tu reporte ha sido disputado por la comunidad.';
+        transaction.set(notificationRef, {
+            message,
+            type: notificationType,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+            userId: authorId
+        });
+      }
+    });
+
     revalidatePath('/');
     revalidatePath('/alerts');
+    return { status: 'success', message: 'Voto registrado.' };
+  } catch (error: any) {
+    console.error("Vote casting failed:", error);
+    return { status: 'error', message: error.message || "No se pudo registrar el voto." };
+  }
 }
 
 
@@ -268,22 +339,16 @@ export async function handleAdminReportAction(input: {
   reportId: string;
   newStatus: 'confirmed' | 'false';
   adminId: string;
+  authorId: string;
 }): Promise<ActionStateSimple> {
     const adminApp = getAdminApp();
     const firestore = adminApp.firestore();
-    const { reportId, newStatus } = input;
+    const { reportId, newStatus, authorId } = input;
 
     try {
         const batch = firestore.batch();
-
         const reportRef = firestore.collection('incidentReports').doc(reportId);
-        const reportDoc = await reportRef.get();
-
-        if (!reportDoc.exists) {
-            throw new Error("Report not found.");
-        }
-        const reportData = reportDoc.data() as IncidentReport;
-        const authorRef = firestore.collection('users').doc(reportData.userId);
+        const authorRef = firestore.collection('users').doc(authorId);
 
         batch.update(reportRef, { status: newStatus });
 
@@ -294,13 +359,13 @@ export async function handleAdminReportAction(input: {
             ? `Un administrador ha confirmado tu reporte.`
             : `Un administrador marcó tu reporte como falso.`;
 
-        const notificationRef = firestore.collection('users').doc(reportData.userId).collection('notifications').doc();
+        const notificationRef = firestore.collection('users').doc(authorId).collection('notifications').doc();
         batch.set(notificationRef, {
             message: notificationMessage,
             type: newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss',
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             read: false,
-            userId: reportData.userId
+            userId: authorId
         });
         
         await batch.commit();
