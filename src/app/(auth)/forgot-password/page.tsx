@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { useAuth } from '@/firebase';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
+import { useFirebaseApp } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -30,7 +30,7 @@ type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const auth = useAuth();
+  const app = useFirebaseApp();
   const { toast } = useToast();
 
   const {
@@ -43,15 +43,7 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (data: ForgotPasswordInput) => {
     setLoading(true);
-    if (!auth) {
-        toast({
-            variant: 'destructive',
-            title: 'Error de configuración',
-            description: 'El servicio de autenticación no está disponible.',
-        });
-        setLoading(false);
-        return;
-    }
+    const auth = getAuth(app);
     try {
       await sendPasswordResetEmail(auth, data.email);
       setEmailSent(true);

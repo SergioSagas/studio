@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirebaseApp, useFirestore, setDocumentNonBlocking } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Logo } from '@/components/icons';
-import { setDocumentNonBlocking } from '@/firebase';
+
 
 const signupSchema = z.object({
   firstName: z.string().min(2, { message: 'El nombre es requerido.' }),
@@ -38,7 +38,7 @@ type SignupInput = z.infer<typeof signupSchema>;
 export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const auth = useAuth();
+  const app = useFirebaseApp();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -52,11 +52,12 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupInput) => {
     setLoading(true);
-    if (!auth || !firestore) {
+    const auth = getAuth(app);
+    if (!firestore) {
       toast({
         variant: 'destructive',
         title: 'Error de configuración',
-        description: 'Los servicios de Firebase no están disponibles.',
+        description: 'El servicio de base de datos no está disponible.',
       });
       setLoading(false);
       return;
@@ -70,12 +71,12 @@ export default function SignupPage() {
       const user = userCredential.user;
 
       const userRef = doc(firestore, 'users', user.uid);
-      await setDoc(userRef, {
+      setDocumentNonBlocking(userRef, {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
         role: 'user',
-      });
+      }, { merge: false });
       
       toast({
         title: 'Cuenta creada',
@@ -90,9 +91,7 @@ export default function SignupPage() {
             title: 'Correo ya registrado',
             description: 'Este correo ya está en uso. Intenta iniciar sesión.',
         });
-        // Opcional: Podrías intentar "reparar" un usuario huérfano aquí,
-        // pero por ahora solo notificamos al usuario.
-        // Por ejemplo, podrías intentar iniciar sesión para obtener el UID y luego verificar si el doc existe.
+        
         try {
             const credential = await signInWithEmailAndPassword(auth, data.email, data.password);
             const user = credential.user;
@@ -112,7 +111,6 @@ export default function SignupPage() {
                 });
             }
         } catch (repairError) {
-             // Si el inicio de sesión falla (contraseña incorrecta), no hacemos nada más.
              console.error("Could not repair user profile:", repairError);
         }
 

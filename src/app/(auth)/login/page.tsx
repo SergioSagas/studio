@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirebaseApp, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,7 +39,7 @@ type LoginInput = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const auth = useAuth();
+  const app = useFirebaseApp();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -60,11 +60,12 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginInput) => {
     setLoading(true);
-    if (!auth || !firestore) {
+    const auth = getAuth(app);
+    if (!firestore) {
         toast({
             variant: 'destructive',
             title: 'Error de configuración',
-            description: 'Los servicios de Firebase no están disponibles.',
+            description: 'El servicio de base de datos no está disponible.',
         });
         setLoading(false);
         return;
@@ -80,10 +81,8 @@ export default function LoginPage() {
       const userDocRef = doc(firestore, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
-      // Si el perfil no existe, créalo (autocorrección)
       if (!userDoc.exists()) {
         if (data.role === 'user') {
-          // Asumimos que no podemos obtener nombre/apellido aquí, así que creamos un perfil básico
           await setDoc(userDocRef, {
             email: user.email,
             role: 'user',
@@ -91,12 +90,10 @@ export default function LoginPage() {
             lastName: 'Nuevo',
           });
         } else {
-           // Si intenta iniciar como admin y no existe, es un error.
            await auth.signOut();
            throw new Error('El perfil de administrador no existe.');
         }
       } else if (userDoc.data().role !== data.role) {
-        // Si el perfil existe pero el rol no coincide
         await auth.signOut();
         throw new Error('No tienes permiso para iniciar sesión con el rol seleccionado.');
       }
