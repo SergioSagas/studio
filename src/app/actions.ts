@@ -270,7 +270,6 @@ export async function castVoteAction(input: {
 
   try {
     const reportRef = firestore.collection('incidentReports').doc(reportId);
-    const authorRef = firestore.collection('users').doc(authorId);
     
     await firestore.runTransaction(async (transaction) => {
       const reportDoc = await transaction.get(reportRef);
@@ -286,15 +285,17 @@ export async function castVoteAction(input: {
         // User has already voted, do nothing.
         return;
       }
-      
-      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
-      const newVoteArray = voteType === 'confirm' ? [...confirmations, actionUserId] : [...disputes, actionUserId];
-      
-      transaction.update(reportRef, { [voteField]: newVoteArray });
-      
-      const newConfirmationsCount = voteType === 'confirm' ? newVoteArray.length : confirmations.length;
-      const newDisputesCount = voteType === 'dispute' ? newVoteArray.length : disputes.length;
 
+      const updates: { [key: string]: any } = {};
+      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+      const currentVotes = reportData[voteField] || [];
+      updates[voteField] = [...currentVotes, actionUserId];
+      
+      transaction.update(reportRef, updates);
+      
+      const newConfirmationsCount = voteType === 'confirm' ? updates[voteField].length : confirmations.length;
+      const newDisputesCount = voteType === 'dispute' ? updates[voteField].length : disputes.length;
+      
       let newStatus: IncidentReport['status'] | null = null;
       let reputationChange = 0;
       let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
@@ -310,6 +311,7 @@ export async function castVoteAction(input: {
       }
       
       if (newStatus && notificationType) {
+        const authorRef = firestore.collection('users').doc(authorId);
         transaction.update(reportRef, { status: newStatus });
         transaction.update(authorRef, { reputation: admin.firestore.FieldValue.increment(reputationChange) });
         
