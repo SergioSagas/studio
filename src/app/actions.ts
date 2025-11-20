@@ -180,12 +180,10 @@ const getAdminApp = () => {
   if (admin.apps.find(app => app?.name === appName)) {
     return admin.app(appName);
   }
-  return admin.initializeApp(
-    {
+  // This simplified initialization works in App Hosting and local dev with service account env var
+  return admin.initializeApp({
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    },
-    appName
-  );
+  }, appName);
 };
 
 
@@ -310,14 +308,36 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
   }
 }
 
+const adminActionSchema = z.object({
+    reportId: z.string(),
+    newStatus: z.enum(['confirmed', 'false']),
+    adminId: z.string(),
+});
 
-export async function handleAdminReportAction(reportId: string, newStatus: 'confirmed' | 'false', adminId: string): Promise<VoteState> {
+export async function handleAdminReportAction(prevState: VoteState, formData: FormData): Promise<VoteState> {
+  const validatedFields = adminActionSchema.safeParse({
+    reportId: formData.get('reportId'),
+    newStatus: formData.get('newStatus'),
+    adminId: formData.get('adminId'),
+  });
+
+  if (!validatedFields.success) {
+    return { status: 'error', message: 'Datos de acción de admin inválidos.' };
+  }
+
+  const { reportId, newStatus, adminId } = validatedFields.data;
+
   const adminApp = getAdminApp();
   const firestore = adminApp.firestore();
-
-  const reportRef = firestore.collection('incidentReports').doc(reportId);
   
   try {
+    const adminUserDoc = await firestore.collection('users').doc(adminId).get();
+    if (!adminUserDoc.exists || adminUserDoc.data()?.role !== 'admin') {
+      return { status: 'error', message: 'Acción no autorizada. Solo los administradores pueden realizar esta acción.' };
+    }
+
+    const reportRef = firestore.collection('incidentReports').doc(reportId);
+    
     await firestore.runTransaction(async (transaction) => {
         const reportDoc = await transaction.get(reportRef);
         if (!reportDoc.exists) throw new Error("El reporte no existe.");
@@ -332,10 +352,14 @@ export async function handleAdminReportAction(reportId: string, newStatus: 'conf
         transaction.update(reportRef, { status: newStatus });
 
         let reputationChange = 0;
+        let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
+
         if (newStatus === 'confirmed' && report.status !== 'confirmed') {
             reputationChange = 1;
+            notificationType = 'report_confirmed';
         } else if (newStatus === 'false' && report.status !== 'false') {
             reputationChange = -2; // Penalización más fuerte por reporte falso
+            notificationType = 'report_disputed';
         }
 
         if (reputationChange !== 0 && authorProfile) {
@@ -354,7 +378,7 @@ export async function handleAdminReportAction(reportId: string, newStatus: 'conf
                 transaction.set(notificationRef, {
                     userId: report.userId,
                     message: notificationMsg.message,
-                    type: newStatus === 'confirmed' ? 'report_confirmed' : 'report_disputed',
+                    type: notificationType,
                     timestamp: new Date().toISOString(),
                     read: false,
                 });
@@ -366,7 +390,7 @@ export async function handleAdminReportAction(reportId: string, newStatus: 'conf
 
     revalidatePath('/');
     revalidatePath('/alerts');
-    return { status: 'success', message: `Reporte marcado como ${newStatus}.` };
+    return { status: 'success', message: `Reporte marcado como ${newStatus === 'confirmed' ? 'confirmado' : 'falso'}.` };
 
   } catch (error: any) {
     return { status: 'error', message: error.message || 'Error al actualizar el reporte.' };

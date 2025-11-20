@@ -313,23 +313,29 @@ export default function DashboardPage() {
                         <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                                {role === 'admin' ? (
-                                <>
+                                <form action={() => handleAdminActionClick(report.id, 'confirmed')} className="flex">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'confirmed')} disabled={report.status === 'confirmed' || isActionPending}>
+                                      <Button variant="ghost" size="icon" type="submit" disabled={report.status === 'confirmed' || isActionPending}>
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Verificar Reporte</p></TooltipContent>
                                   </Tooltip>
+                                  </form>
+                                  ,
+                                  <form action={() => handleAdminActionClick(report.id, 'false')} className="flex">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'false')} disabled={report.status === 'false' || isActionPending}>
+                                      <Button variant="ghost" size="icon" type="submit" disabled={report.status === 'false' || isActionPending}>
                                         <XCircle className="h-4 w-4 text-red-600" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Marcar como Falso</p></TooltipContent>
                                   </Tooltip>
+                                </form>
+                                ,
+                                <>
                                   <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -338,24 +344,27 @@ export default function DashboardPage() {
                                   </Button>
                                 </>
                               ) : (
-                                <>
+                                <form action={() => handleUserVote(report.id, 'confirm')}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} onClick={() => handleUserVote(report.id, 'confirm')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} type="submit">
                                         <ThumbsUp className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Confirmar ({(report.confirmations || []).length})</p></TooltipContent>
                                   </Tooltip>
+                                </form>
+                                ,
+                                <form action={() => handleUserVote(report.id, 'dispute')}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} onClick={() => handleUserVote(report.id, 'dispute')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} type="submit">
                                         <ThumbsDown className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Disputar ({(report.disputes || []).length})</p></TooltipContent>
                                   </Tooltip>
-                                </>
+                                </form>
                               )}
                             </div>
                         </TableCell>
