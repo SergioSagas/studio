@@ -8,7 +8,11 @@ import {
   Siren,
   Users,
   Edit,
-  Trash2
+  Trash2,
+  ThumbsUp,
+  ThumbsDown,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { type IncidentReport } from '@/lib/data';
 import { cn } from '@/lib/utils';
@@ -33,7 +37,7 @@ import { PageHeader } from '@/components/page-header';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
 import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
@@ -43,6 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
+import { confirmIncidentAction, disputeIncidentAction } from '@/app/actions';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -85,6 +90,7 @@ function StatCard({
 }
 
 export default function DashboardPage() {
+  const { user } = useUser();
   const { role } = useUserRole();
   const { toast } = useToast();
   const firestore = useFirestore();
@@ -158,6 +164,24 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
+  const handleConfirm = async (reportId: string, isAdminAction: boolean) => {
+    const result = await confirmIncidentAction(reportId, isAdminAction);
+    if (result?.status === 'error') {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    } else {
+      toast({ title: 'Acción completada', description: 'El reporte ha sido actualizado.' });
+    }
+  };
+
+  const handleDispute = async (reportId: string, isAdminAction: boolean) => {
+    const result = await disputeIncidentAction(reportId, isAdminAction);
+    if (result?.status === 'error') {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    } else {
+      toast({ title: 'Acción completada', description: 'El reporte ha sido actualizado.' });
+    }
+  };
+
   return (
     <>
       <EditIncidentModal
@@ -225,14 +249,20 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableHead>Incidente</TableHead>
                       <TableHead>Riesgo</TableHead>
+                      <TableHead>Estatus</TableHead>
                       <TableHead className="hidden md:table-cell">Ubicación</TableHead>
                       <TableHead className="hidden md:table-cell">Hora</TableHead>
                       <TableHead>Resumen</TableHead>
-                      {role === 'admin' && <TableHead className="text-right">Acciones</TableHead>}
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {highPriorityIncidents?.map((report) => (
+                    {highPriorityIncidents?.map((report) => {
+                      const isOwner = user?.uid === report.userId;
+                      const hasVoted = report.confirmations.includes(user?.uid ?? '') || report.disputes.includes(user?.uid ?? '');
+                      const canVote = !isOwner && !hasVoted;
+
+                      return (
                       <TableRow key={report.id}>
                         <TableCell>
                           <div className="font-medium">{report.incidentType}</div>
@@ -244,6 +274,11 @@ export default function DashboardPage() {
                           >
                             {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                           <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
+                              {report.status === 'unverified' ? 'Sin verificar' : report.status === 'confirmed' ? 'Confirmado' : report.status === 'disputed' ? 'Disputado' : 'Falso'}
+                            </Badge>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {report.location}
@@ -261,20 +296,57 @@ export default function DashboardPage() {
                             </TooltipContent>
                           </Tooltip>
                         </TableCell>
-                        {role === 'admin' && (
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                        <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                               {role === 'admin' ? (
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" onClick={() => handleConfirm(report.id, true)}>
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Verificar Reporte</p></TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" onClick={() => handleDispute(report.id, true)}>
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Marcar como Falso</p></TooltipContent>
+                                  </Tooltip>
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleConfirm(report.id, false)}>
+                                        <ThumbsUp className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Confirmar ({report.confirmations.length})</p></TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleDispute(report.id, false)}>
+                                        <ThumbsDown className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Disputar ({report.disputes.length})</p></TooltipContent>
+                                  </Tooltip>
+                                </>
+                              )}
                             </div>
-                          </TableCell>
-                        )}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
               </TooltipProvider>

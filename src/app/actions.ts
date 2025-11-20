@@ -13,6 +13,10 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
+import { getFirestore, doc, getDoc, updateDoc, increment, writeBatch } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase/index';
+import { cookies } from 'next/headers';
+import { getAuth } from 'firebase/auth';
 
 
 // Report Analysis Action
@@ -137,5 +141,139 @@ export async function fetchCrimePatternsAction(reports: Omit<IncidentReport, 'id
     } catch (error) {
         console.error("Failed to detect crime patterns:", error);
         return null;
+    }
+}
+
+
+// Reputation Actions
+type ReputationActionState = {
+  status: 'idle' | 'success' | 'error';
+  message?: string;
+};
+
+const getUserId = async (): Promise<string | null> => {
+    // This is a simplified way to get the user ID on the server.
+    // In a real app, you would get this from your server-side session management.
+    // For this prototype, we'll assume the client sends it or we get it from a simulated session.
+    // The most reliable way with Firebase is to verify an ID token sent from the client.
+    // However, for simplicity, let's assume we can get it from the auth object.
+    const { auth } = initializeFirebase();
+    return auth.currentUser?.uid || null;
+}
+
+async function updateUserReputation(userId: string, change: number) {
+    const { firestore } = initializeFirebase();
+    const userRef = doc(firestore, 'users', userId);
+    await updateDoc(userRef, { reputation: increment(change) });
+}
+
+export async function confirmIncidentAction(incidentId: string, isAdminAction: boolean = false): Promise<ReputationActionState> {
+    const { firestore } = initializeFirebase();
+    const { auth } = initializeFirebase();
+    const userId = auth.currentUser?.uid;
+    const userRole = auth.currentUser ? (await getDoc(doc(firestore, 'users', auth.currentUser.uid))).data()?.role : null;
+
+
+    if (!userId) {
+        return { status: 'error', message: 'Debes iniciar sesión para confirmar un incidente.' };
+    }
+
+    const incidentRef = doc(firestore, 'incidentReports', incidentId);
+    
+    try {
+        const incidentSnap = await getDoc(incidentRef);
+        if (!incidentSnap.exists()) {
+            return { status: 'error', message: 'El incidente no existe.' };
+        }
+
+        const incident = incidentSnap.data() as IncidentReport;
+        if (incident.userId === userId) {
+            return { status: 'error', message: 'No puedes confirmar tu propio reporte.' };
+        }
+
+        if (incident.confirmations.includes(userId) || incident.disputes.includes(userId)) {
+            return { status: 'error', message: 'Ya has votado en este reporte.' };
+        }
+        
+        const batch = writeBatch(firestore);
+        
+        if (isAdminAction && userRole === 'admin') {
+            batch.update(incidentRef, { status: 'confirmed' });
+            if (incident.status !== 'confirmed') {
+                updateUserReputation(incident.userId, 1); // Admin confirmation gives 1 point
+            }
+        } else {
+            const newConfirmations = [...incident.confirmations, userId];
+            batch.update(incidentRef, { confirmations: newConfirmations });
+
+            if (newConfirmations.length >= 3 && incident.status === 'unverified') {
+                batch.update(incidentRef, { status: 'confirmed' });
+                updateUserReputation(incident.userId, 1);
+            }
+        }
+        
+        await batch.commit();
+
+        revalidatePath('/');
+        revalidatePath('/alerts');
+        return { status: 'success', message: 'Incidente confirmado.' };
+
+    } catch (e) {
+        return { status: 'error', message: 'Ocurrió un error al procesar la confirmación.' };
+    }
+}
+
+
+export async function disputeIncidentAction(incidentId: string, isAdminAction: boolean = false): Promise<ReputationActionState> {
+    const { firestore } = initializeFirebase();
+    const { auth } = initializeFirebase();
+    const userId = auth.currentUser?.uid;
+    const userRole = auth.currentUser ? (await getDoc(doc(firestore, 'users', auth.currentUser.uid))).data()?.role : null;
+
+    if (!userId) {
+        return { status: 'error', message: 'Debes iniciar sesión para disputar un incidente.' };
+    }
+
+    const incidentRef = doc(firestore, 'incidentReports', incidentId);
+    
+    try {
+        const incidentSnap = await getDoc(incidentRef);
+        if (!incidentSnap.exists()) {
+            return { status: 'error', message: 'El incidente no existe.' };
+        }
+
+        const incident = incidentSnap.data() as IncidentReport;
+        if (incident.userId === userId) {
+            return { status: 'error', message: 'No puedes disputar tu propio reporte.' };
+        }
+
+        if (incident.confirmations.includes(userId) || incident.disputes.includes(userId)) {
+            return { status: 'error', message: 'Ya has votado en este reporte.' };
+        }
+        
+        const batch = writeBatch(firestore);
+
+        if (isAdminAction && userRole === 'admin') {
+             batch.update(incidentRef, { status: 'false' });
+             if (incident.status !== 'false') {
+                updateUserReputation(incident.userId, -2); // Admin dispute is a heavy penalty
+             }
+        } else {
+            const newDisputes = [...incident.disputes, userId];
+            batch.update(incidentRef, { disputes: newDisputes });
+
+            if (newDisputes.length >= 3 && incident.status === 'unverified') {
+                batch.update(incidentRef, { status: 'disputed' });
+                updateUserReputation(incident.userId, -1);
+            }
+        }
+
+        await batch.commit();
+
+        revalidatePath('/');
+        revalidatePath('/alerts');
+        return { status: 'success', message: 'Incidente disputado.' };
+    } catch (e) {
+        return { status: 'error', message: 'Ocurrió un error al procesar la disputa.' };
     }
 }
