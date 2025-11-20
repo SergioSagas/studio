@@ -60,15 +60,6 @@ function AlertCard({ report }: { report: IncidentReport }) {
     }
   }, [voteState, toast]);
 
-  const handleVote = (voteType: 'confirm' | 'dispute') => {
-    if (!user) return;
-    const formData = new FormData();
-    formData.append('reportId', report.id);
-    formData.append('voteType', voteType);
-    formData.append('actionUserId', user.uid);
-    voteAction(formData);
-  };
-  
   const isOwner = user?.uid === report.userId;
   const confirmations = report.confirmations || [];
   const disputes = report.disputes || [];
@@ -77,7 +68,17 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
-  const statusText = report.status === 'unverified' ? 'Sin verificar' : report.status === 'confirmed' ? 'Confirmado' : report.status === 'disputed' ? 'Disputado' : report.status === 'false' ? 'Falso' : 'Sin verificar';
+  
+  const getStatusText = (status: IncidentReport['status'] | undefined) => {
+    switch (status) {
+        case 'confirmed': return 'Confirmado';
+        case 'disputed': return 'Disputado';
+        case 'false': return 'Falso';
+        default: return 'Sin verificar';
+    }
+  }
+  const statusText = getStatusText(report.status);
+
 
   return (
     <Card className="flex flex-col">
@@ -102,7 +103,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        <p className="text-sm text-muted-foreground">{report.summary}</p>
+        <p className="text-sm text-muted-foreground">{report.summary || report.description}</p>
       </CardContent>
       <CardFooter className="flex-col items-start gap-4">
         <div className="text-xs text-muted-foreground flex items-center gap-2">
@@ -112,14 +113,24 @@ function AlertCard({ report }: { report: IncidentReport }) {
         {user && (
           <div className="flex w-full items-center justify-between">
             <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleVote('confirm')} disabled={!canVote || isVoting} aria-label="Confirmar">
-                  <ThumbsUp className="size-4 mr-2" />
-                  {confirmations.length}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleVote('dispute')} disabled={!canVote || isVoting} aria-label="Disputar">
-                  <ThumbsDown className="size-4 mr-2" />
-                  {disputes.length}
-                </Button>
+                <form action={voteAction}>
+                    <input type="hidden" name="reportId" value={report.id} />
+                    <input type="hidden" name="voteType" value="confirm" />
+                    <input type="hidden" name="actionUserId" value={user.uid} />
+                    <Button type="submit" variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Confirmar">
+                        <ThumbsUp className="size-4 mr-2" />
+                        {confirmations.length}
+                    </Button>
+                </form>
+                <form action={voteAction}>
+                    <input type="hidden" name="reportId" value={report.id} />
+                    <input type="hidden" name="voteType" value="dispute" />
+                    <input type="hidden" name="actionUserId" value={user.uid} />
+                    <Button type="submit" variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Disputar">
+                        <ThumbsDown className="size-4 mr-2" />
+                        {disputes.length}
+                    </Button>
+                </form>
             </div>
              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
               {statusText}

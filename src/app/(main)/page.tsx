@@ -175,25 +175,6 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
-  const handleAdminActionClick = (reportId: string, status: 'confirmed' | 'false') => {
-    if (!user) return;
-    const formData = new FormData();
-    formData.append('reportId', reportId);
-    formData.append('newStatus', status);
-    formData.append('adminId', user.uid);
-    adminAction(formData);
-  };
-
-
-  const handleUserVote = (reportId: string, voteType: 'confirm' | 'dispute') => {
-    if (!user) return;
-    const formData = new FormData();
-    formData.append('reportId', reportId);
-    formData.append('voteType', voteType);
-    formData.append('actionUserId', user.uid);
-    voteAction(formData);
-  };
-
   const isActionPending = isVoting || isAdminActionPending;
 
   return (
@@ -278,7 +259,16 @@ export default function DashboardPage() {
                       const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
                       const isFinalStatus = ['confirmed', 'disputed', 'false'].includes(report.status);
                       const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
-                      const statusText = report.status === 'unverified' ? 'Sin verificar' : report.status === 'confirmed' ? 'Confirmado' : report.status === 'disputed' ? 'Disputado' : report.status === 'false' ? 'Falso' : 'Sin verificar';
+                      
+                      const getStatusText = (status: IncidentReport['status'] | undefined) => {
+                        switch (status) {
+                            case 'confirmed': return 'Confirmado';
+                            case 'disputed': return 'Disputado';
+                            case 'false': return 'Falso';
+                            default: return 'Sin verificar';
+                        }
+                      }
+                      const statusText = getStatusText(report.status);
 
                       return (
                       <TableRow key={report.id}>
@@ -307,10 +297,10 @@ export default function DashboardPage() {
                         <TableCell className="max-w-xs truncate text-muted-foreground">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="cursor-default">{report.summary}</span>
+                              <span className="cursor-default">{report.summary || report.description}</span>
                             </TooltipTrigger>
                             <TooltipContent side="top" align="start" className="max-w-sm whitespace-normal">
-                              <p>{report.summary}</p>
+                              <p>{report.summary || report.description}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TableCell>
@@ -318,22 +308,32 @@ export default function DashboardPage() {
                             <div className="flex justify-end gap-1">
                                {role === 'admin' ? (
                                 <>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'confirmed')} disabled={report.status === 'confirmed' || isActionPending}>
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Verificar Reporte</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                       <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'false')} disabled={report.status === 'false' || isActionPending}>
-                                        <XCircle className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Marcar como Falso</p></TooltipContent>
-                                  </Tooltip>
+                                <form action={adminAction}>
+                                    <input type="hidden" name="reportId" value={report.id} />
+                                    <input type="hidden" name="newStatus" value="confirmed" />
+                                    <input type="hidden" name="adminId" value={user?.uid ?? ''} />
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button type="submit" variant="ghost" size="icon" disabled={report.status === 'confirmed' || isActionPending}>
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Verificar Reporte</p></TooltipContent>
+                                    </Tooltip>
+                                </form>
+                                 <form action={adminAction}>
+                                    <input type="hidden" name="reportId" value={report.id} />
+                                    <input type="hidden" name="newStatus" value="false" />
+                                    <input type="hidden" name="adminId" value={user?.uid ?? ''} />
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button type="submit" variant="ghost" size="icon" disabled={report.status === 'false' || isActionPending}>
+                                            <XCircle className="h-4 w-4 text-red-600" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Marcar como Falso</p></TooltipContent>
+                                    </Tooltip>
+                                  </form>
                                   <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -343,22 +343,32 @@ export default function DashboardPage() {
                                 </>
                               ) : (
                                 <>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleUserVote(report.id, 'confirm')} disabled={!canVote || isActionPending}>
-                                        <ThumbsUp className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleUserVote(report.id, 'dispute')} disabled={!canVote || isActionPending}>
-                                        <ThumbsDown className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>
-                                  </Tooltip>
+                                <form action={voteAction}>
+                                    <input type="hidden" name="reportId" value={report.id} />
+                                    <input type="hidden" name="voteType" value="confirm" />
+                                    <input type="hidden" name="actionUserId" value={user?.uid ?? ''} />
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button type="submit" variant="ghost" size="icon" disabled={!canVote || isActionPending}>
+                                            <ThumbsUp className="h-4 w-4" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
+                                    </Tooltip>
+                                </form>
+                                <form action={voteAction}>
+                                    <input type="hidden" name="reportId" value={report.id} />
+                                    <input type="hidden" name="voteType" value="dispute" />
+                                    <input type="hidden" name="actionUserId" value={user?.uid ?? ''} />
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button type="submit" variant="ghost" size="icon" disabled={!canVote || isActionPending}>
+                                            <ThumbsDown className="h-4 w-4" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>
+                                    </Tooltip>
+                                </form>
                                 </>
                               )}
                             </div>
