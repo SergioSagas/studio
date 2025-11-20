@@ -16,7 +16,7 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
-import { getFirestore, doc, updateDoc, getDoc, FieldValue } from 'firebase/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { firebaseConfig } from '@/firebase/config';

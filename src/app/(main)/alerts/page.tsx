@@ -25,7 +25,6 @@ import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { confirmIncidentAction, disputeIncidentAction } from '@/app/actions';
-import { useUserRole } from '@/hooks/useUserRole';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -43,7 +42,6 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
 function AlertCard({ report }: { report: IncidentReport }) {
   const { user } = useUser();
   const { toast } = useToast();
-  const { role } = useUserRole();
 
   const isOwner = user?.uid === report.userId;
   const hasConfirmed = (report.confirmations || []).includes(user?.uid ?? '');
