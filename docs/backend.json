@@ -35,10 +35,6 @@
       "type": "object",
       "description": "Represents a report of an incident submitted by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the incident report entity."
-        },
         "userId": {
           "type": "string",
           "description": "Reference to the user who submitted the report. (Relationship: User 1:N IncidentReport)"
@@ -81,7 +77,6 @@
         }
       },
       "required": [
-        "id",
         "userId",
         "incidentType",
         "description",

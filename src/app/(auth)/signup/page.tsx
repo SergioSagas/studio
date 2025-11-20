@@ -79,7 +79,6 @@ export default function SignupPage() {
         email: data.email,
         role: 'user',
         reputation: 10,
-        id: user.uid,
       });
       
       toast({
@@ -112,7 +111,6 @@ export default function SignupPage() {
                     email: data.email,
                     role: 'user',
                     reputation: 10,
-                    id: user.uid,
                 });
                 toast({
                     title: 'Perfil de usuario restaurado',
