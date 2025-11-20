@@ -21,7 +21,7 @@ const AnalyzeCitizenReportInputSchema = z.object({
 export type AnalyzeCitizenReportInput = z.infer<typeof AnalyzeCitizenReportInputSchema>;
 
 const AnalyzeCitizenReportOutputSchema = z.object({
-  incidentType: z.string().describe('El tipo de incidente clasificado (p. ej., robo, vandalismo, ruido, accidente).'),
+  incidentType: z.string().describe('El tipo de incidente clasificado (p. ej., robo, vandalismo, ataque animal, accidente).'),
   riskLevel: z.enum(['low', 'medium', 'high']).describe('El nivel de riesgo evaluado del incidente.'),
   summary: z.string().describe('Un breve resumen del incidente.'),
 });
@@ -35,6 +35,14 @@ const prompt = ai.definePrompt({
   name: 'analyzeCitizenReportPrompt',
   input: {schema: AnalyzeCitizenReportInputSchema},
   output: {schema: AnalyzeCitizenReportOutputSchema},
+  config: {
+    safetySettings: [
+      {
+        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+        threshold: 'BLOCK_NONE',
+      },
+    ],
+  },
   prompt: `Eres el Agente SafeCity, un asistente comunitario inteligente diseñado para mejorar la seguridad del vecindario al detectar, alertar y prevenir incidentes criminales.
   Analiza el informe ciudadano a continuación para clasificar el tipo de incidente y el nivel de riesgo.
 
@@ -44,7 +52,7 @@ const prompt = ai.definePrompt({
   {{#if reportVideoDataUri}}Video del Informe: {{media url=reportVideoDataUri}}{{/if}}
   {{#if reportLocation}}Ubicación del Informe: {{{reportLocation}}}{{/if}}
 
-  Clasifica el tipo de incidente y el nivel de riesgo (bajo, medio o alto).
+  Clasifica el tipo de incidente y el nivel de riesgo (bajo, medio o alto). Si se describe un ataque de un animal, clasifícalo como 'Ataque de Animal'.
   Proporciona un breve resumen del incidente.
   Recuerda mantener el resumen anonimizado de cualquier información sensible como nombres, direcciones o números personales.
   Salida en formato JSON:
