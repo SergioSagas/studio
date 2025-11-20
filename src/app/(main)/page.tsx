@@ -147,10 +147,10 @@ export default function DashboardPage() {
         const reportRef = doc(firestore, 'incidentReports', report.id);
 
         const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
-        const currentVotes = Array.isArray(report[voteField]) ? report[voteField] : [];
         
         batch.update(reportRef, { [voteField]: arrayUnion(user.uid) });
 
+        const currentVotes = Array.isArray(report[voteField]) ? report[voteField] : [];
         const newVotesCount = currentVotes.length + 1;
         let newStatus: IncidentReport['status'] | null = null;
         let reputationChange = 0;
@@ -303,152 +303,154 @@ export default function DashboardPage() {
           />
         </div>
         
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle>Incidentes Recientes</CardTitle>
-            <CardDescription>
-              Un resumen de los reportes más recientes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            {isLoadingHighPriority ? (
-              <Loader className='h-48' />
-            ) : (
-              <TooltipProvider>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Incidente</TableHead>
-                      <TableHead>Riesgo</TableHead>
-                      <TableHead>Estatus</TableHead>
-                      <TableHead className="hidden md:table-cell">Ubicación</TableHead>
-                      <TableHead className="hidden md:table-cell">Hora</TableHead>
-                      <TableHead>Resumen</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {highPriorityIncidents?.map((report) => {
-                      const isOwner = user?.uid === report.userId;
-                      const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
-                      const disputes = Array.isArray(report.disputes) ? report.disputes : [];
-                      const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
-                      const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
-                      const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
-                      
-                      const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
-                        switch (status) {
-                            case 'confirmed': return 'Confirmado';
-                            case 'disputed': return 'Disputado';
-                            case 'false': return 'Falso';
-                            case 'unverified':
-                            default: return 'Sin verificar';
-                        }
-                      }
-                      const statusText = getStatusText(report.status);
-                      const isPending = isActionPending === report.id;
-
-                      return (
-                      <TableRow key={report.id}>
-                        <TableCell>
-                          <div className="font-medium">{report.incidentType}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={getRiskBadgeVariant(report.riskLevel)}
-                            className="capitalize"
-                          >
-                            {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
-                              {statusText}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {report.location}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {new Date(report.reportTime).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate text-muted-foreground">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-default">{report.summary || report.description}</span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="start" className="max-w-sm whitespace-normal">
-                              <p>{report.summary || report.description}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {role === 'admin' ? (
-                                <>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report, 'confirmed')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
-                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 text-green-600" />}
-                                      </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>Verificar Reporte</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report, 'false')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
-                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 text-red-600" />}
-                                      </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>Marcar como Falso</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                        <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(report)} disabled={isPending}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent><p>Editar Reporte</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                        <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)} disabled={isPending}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent><p>Eliminar Reporte</p></TooltipContent>
-                                  </Tooltip>
-                                </>
-                              ) : (
-                                <>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                      <Button onClick={() => handleUserVote(report, 'confirm')} variant="ghost" size="icon" disabled={!canVote || isPending}>
-                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4" />}
-                                      </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild>
-                                      <Button onClick={() => handleUserVote(report, 'dispute')} variant="ghost" size="icon" disabled={!canVote || isPending}>
-                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
-                                      </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>
-                                  </Tooltip>
-                                </>
-                              )}
-                            </div>
-                        </TableCell>
+        <div className="flex min-w-0">
+          <Card className="min-w-0 flex-1">
+            <CardHeader>
+              <CardTitle>Incidentes Recientes</CardTitle>
+              <CardDescription>
+                Un resumen de los reportes más recientes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingHighPriority ? (
+                <Loader className='h-48' />
+              ) : (
+                <TooltipProvider>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Incidente</TableHead>
+                        <TableHead>Riesgo</TableHead>
+                        <TableHead>Estatus</TableHead>
+                        <TableHead className="hidden md:table-cell">Ubicación</TableHead>
+                        <TableHead className="hidden md:table-cell">Hora</TableHead>
+                        <TableHead>Resumen</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
-                    )})}
-                  </TableBody>
-                </Table>
-              </TooltipProvider>
-            )}
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {highPriorityIncidents?.map((report) => {
+                        const isOwner = user?.uid === report.userId;
+                        const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
+                        const disputes = Array.isArray(report.disputes) ? report.disputes : [];
+                        const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
+                        const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
+                        const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
+                        
+                        const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
+                          switch (status) {
+                              case 'confirmed': return 'Confirmado';
+                              case 'disputed': return 'Disputado';
+                              case 'false': return 'Falso';
+                              case 'unverified':
+                              default: return 'Sin verificar';
+                          }
+                        }
+                        const statusText = getStatusText(report.status);
+                        const isPending = isActionPending === report.id;
+
+                        return (
+                        <TableRow key={report.id}>
+                          <TableCell>
+                            <div className="font-medium">{report.incidentType}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getRiskBadgeVariant(report.riskLevel)}
+                              className="capitalize"
+                            >
+                              {report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
+                                {statusText}
+                              </Badge>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {report.location}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {new Date(report.reportTime).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate text-muted-foreground">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-default">{report.summary || report.description}</span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="start" className="max-w-sm whitespace-normal">
+                                <p>{report.summary || report.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                {role === 'admin' ? (
+                                  <>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button onClick={() => handleAdminAction(report, 'confirmed')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
+                                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 text-green-600" />}
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Verificar Reporte</p></TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button onClick={() => handleAdminAction(report, 'false')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
+                                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 text-red-600" />}
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Marcar como Falso</p></TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                          <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" onClick={() => handleEdit(report)} disabled={isPending}>
+                                              <Edit className="h-4 w-4" />
+                                          </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent><p>Editar Reporte</p></TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                          <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)} disabled={isPending}>
+                                              <Trash2 className="h-4 w-4 text-destructive" />
+                                          </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent><p>Eliminar Reporte</p></TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button onClick={() => handleUserVote(report, 'confirm')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4" />}
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button onClick={() => handleUserVote(report, 'dispute')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                )}
+                              </div>
+                          </TableCell>
+                        </TableRow>
+                      )})}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </>
   );
