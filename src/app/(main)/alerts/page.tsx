@@ -46,7 +46,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const [voteState, voteAction, isVoting] = useActionState(castVoteAction, { status: 'idle', message: '' });
 
   useEffect(() => {
-    if (voteState.status === 'success') {
+    if (voteState.status === 'success' && voteState.message) {
       toast({
         title: 'Voto Registrado',
         description: voteState.message,
@@ -70,11 +70,15 @@ function AlertCard({ report }: { report: IncidentReport }) {
   };
   
   const isOwner = user?.uid === report.userId;
-  const hasVoted = (report.confirmations || []).includes(user?.uid ?? '') || (report.disputes || []).includes(user?.uid ?? '');
-  const canVote = user && !isOwner && !hasVoted && report.status === 'unverified';
+  const confirmations = report.confirmations || [];
+  const disputes = report.disputes || [];
+  const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
+  const isFinalStatus = ['confirmed', 'disputed', 'false'].includes(report.status);
+  const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
-  
+  const statusText = report.status === 'unverified' ? 'Sin verificar' : report.status === 'confirmed' ? 'Confirmado' : report.status === 'disputed' ? 'Disputado' : report.status === 'false' ? 'Falso' : 'Sin verificar';
+
   return (
     <Card className="flex flex-col">
       <CardHeader>
@@ -110,15 +114,15 @@ function AlertCard({ report }: { report: IncidentReport }) {
             <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => handleVote('confirm')} disabled={!canVote || isVoting} aria-label="Confirmar">
                   <ThumbsUp className="size-4 mr-2" />
-                  {(report.confirmations || []).length || 0}
+                  {confirmations.length}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => handleVote('dispute')} disabled={!canVote || isVoting} aria-label="Disputar">
                   <ThumbsDown className="size-4 mr-2" />
-                  {(report.disputes || []).length || 0}
+                  {disputes.length}
                 </Button>
             </div>
              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
-              {report.status === 'unverified' ? 'Sin verificar' : report.status === 'confirmed' ? 'Confirmado' : report.status === 'disputed' ? 'Disputado' : 'Falso'}
+              {statusText}
             </Badge>
           </div>
         )}

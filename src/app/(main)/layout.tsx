@@ -61,6 +61,7 @@ function UserMenu() {
   }
 
   const displayName = userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : (user.displayName || user.email);
+  const reputation = userProfile?.reputation ?? 10;
 
   return (
     <DropdownMenu>
@@ -82,18 +83,14 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-         {userProfile && (
-          <>
-            <div className="flex items-center justify-between px-2 py-1.5 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Award className="size-4" />
-                <span>Reputación</span>
-              </div>
-              <span className="font-semibold">{userProfile.reputation}</span>
-            </div>
-            <DropdownMenuSeparator />
-          </>
-        )}
+        <div className="flex items-center justify-between px-2 py-1.5 text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Award className="size-4" />
+            <span>Reputación</span>
+          </div>
+          <span className="font-semibold">{reputation}</span>
+        </div>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Cerrar sesión</span>
