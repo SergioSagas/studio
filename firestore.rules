@@ -87,7 +87,7 @@ service cloud.firestore {
         let otherFieldsUnchanged = reportAfter.incidentType == reportBefore.incidentType &&
                                    reportAfter.riskLevel == reportBefore.riskLevel &&
                                    reportAfter.summary == reportBefore.summary &&
-                                   reportAfter.description == reportబోట్నెంట్.description &&
+                                   reportAfter.description == reportBefore.description &&
                                    reportAfter.location == reportBefore.location;
                                    
         return (isConfirming || isDisputing) && otherFieldsUnchanged;
