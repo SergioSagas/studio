@@ -334,12 +334,22 @@ export default function DashboardPage() {
                                         <TooltipContent><p>Marcar como Falso</p></TooltipContent>
                                     </Tooltip>
                                   </form>
-                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
+                                  <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Editar Reporte</p></TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Eliminar Reporte</p></TooltipContent>
+                                  </Tooltip>
                                 </>
                               ) : (
                                 <>
