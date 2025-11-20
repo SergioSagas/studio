@@ -74,7 +74,9 @@ export function ProfileSettingsModal({
     setIsSubmitting(true);
     try {
       const userRef = doc(firestore, 'users', userId);
-      updateDocumentNonBlocking(userRef, { neighborhood: data.neighborhood });
+      // If 'none' is selected, save an empty string to represent no neighborhood.
+      const neighborhoodToSave = data.neighborhood === 'none' ? '' : data.neighborhood;
+      updateDocumentNonBlocking(userRef, { neighborhood: neighborhoodToSave });
 
       toast({
         title: 'Perfil Actualizado',
@@ -117,7 +119,7 @@ export function ProfileSettingsModal({
                       <SelectValue placeholder="Selecciona tu vecindario para recibir alertas locales" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Ninguno (No recibir alertas)</SelectItem>
+                      <SelectItem value="none">Ninguno (No recibir alertas)</SelectItem>
                       {locations.map((loc) => (
                         <SelectItem key={loc} value={loc}>
                           {loc}
