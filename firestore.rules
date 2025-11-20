@@ -63,35 +63,27 @@ service cloud.firestore {
 
       allow delete: if isAdmin();
       
-      // Helper: checks if a user is adding themselves to confirmations/disputes
+      // Helper: checks if a user is casting a vote
       function isCastingVote() {
-        let reportBefore = resource.data;
-        let reportAfter = request.resource.data;
         let userId = request.auth.uid;
-        
+        let report = resource.data;
+        let incomingData = request.resource.data;
+
         // Cannot vote on your own report
-        if (reportBefore.userId == userId) {
+        if (report.userId == userId) {
           return false;
         }
         
         // Cannot vote twice
-        if (reportBefore.confirmations.hasAny([userId]) || reportBefore.disputes.hasAny([userId])) {
+        if (report.confirmations.hasAny([userId]) || report.disputes.hasAny([userId])) {
           return false;
         }
-        
-        // Check if only one vote is being added
-        let isConfirming = reportAfter.confirmations == reportBefore.confirmations.concat([userId]) && reportAfter.disputes == reportBefore.disputes;
-        let isDisputing = reportAfter.disputes == reportBefore.disputes.concat([userId]) && reportAfter.confirmations == reportBefore.confirmations;
 
-        // Ensure other fields are not changed by checking that they are not in the request
-        let otherFieldsUnchanged = !('incidentType' in reportAfter) &&
-                                   !('riskLevel' in reportAfter) &&
-                                   !('summary' in reportAfter) &&
-                                   !('description' in reportAfter) &&
-                                   !('location' in reportAfter) &&
-                                   !('status' in reportAfter);
-                                   
-        return (isConfirming || isDisputing) && otherFieldsUnchanged;
+        // The update request must ONLY contain 'confirmations' or 'disputes', not both, and nothing else.
+        let isConfirming = incomingData.keys().hasAll(['confirmations']) && incomingData.keys().size() == 1;
+        let isDisputing = incomingData.keys().hasAll(['disputes']) && incomingData.keys().size() == 1;
+        
+        return isConfirming || isDisputing;
       }
       
       // Helper: checks if the admin is trying to change vote arrays
