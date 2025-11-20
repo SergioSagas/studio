@@ -35,10 +35,10 @@ import {
 } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useActionState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, orderBy, limit, arrayUnion } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
+import { collection, doc, query, orderBy, limit, updateDoc } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -47,6 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
+import { castVoteAction } from '@/app/actions';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -96,6 +97,23 @@ export default function DashboardPage() {
   const [editingReport, setEditingReport] = useState<IncidentReport | null>(null);
   const isEditModalOpen = !!editingReport;
 
+  const [voteState, voteAction, isVoting] = useActionState(castVoteAction, { status: 'idle', message: '' });
+
+  useEffect(() => {
+    if (voteState.status === 'success' && voteState.message) {
+      toast({
+        title: 'Acción completada',
+        description: voteState.message,
+      });
+    } else if (voteState.status === 'error') {
+      toast({
+        variant: 'destructive',
+        title: 'Error en la acción',
+        description: voteState.message,
+      });
+    }
+  }, [voteState, toast]);
+
   const reportsQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, 'incidentReports') : null),
     [firestore]
@@ -143,16 +161,8 @@ export default function DashboardPage() {
   }, [reports]);
 
   const handleDelete = (id: string) => {
-    if (!firestore) {
-        toast({
-            variant: "destructive",
-            title: "Error al eliminar",
-            description: "No se pudo conectar a la base de datos.",
-        });
-        return;
-    };
-    const reportRef = doc(firestore, 'incidentReports', id);
-    deleteDocumentNonBlocking(reportRef);
+    if (!firestore) return;
+    deleteDocumentNonBlocking(doc(firestore, 'incidentReports', id));
     toast({
       title: "Incidente eliminado",
       description: "El reporte de incidente ha sido eliminado.",
@@ -163,10 +173,10 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
-  const handleAdminAction = (reportId: string, status: 'confirmed' | 'false') => {
+  const handleAdminAction = async (reportId: string, status: 'confirmed' | 'false') => {
     if (!firestore || role !== 'admin') return;
     const incidentRef = doc(firestore, 'incidentReports', reportId);
-    updateDocumentNonBlocking(incidentRef, { status });
+    await updateDoc(incidentRef, { status });
     toast({
       title: 'Reporte Actualizado',
       description: `El estado del reporte se ha cambiado a ${status}.`,
@@ -174,17 +184,12 @@ export default function DashboardPage() {
   };
 
   const handleUserVote = (reportId: string, voteType: 'confirm' | 'dispute') => {
-    if (!user || !firestore) return;
-    const incidentRef = doc(firestore, 'incidentReports', reportId);
-    const updateData = voteType === 'confirm'
-      ? { confirmations: arrayUnion(user.uid) }
-      : { disputes: arrayUnion(user.uid) };
-    
-    updateDocumentNonBlocking(incidentRef, updateData);
-    toast({
-      title: 'Voto Registrado',
-      description: 'Gracias por tu feedback.',
-    });
+    if (!user) return;
+    const formData = new FormData();
+    formData.append('reportId', reportId);
+    formData.append('voteType', voteType);
+    formData.append('actionUserId', user.uid);
+    voteAction(formData);
   };
 
   return (
@@ -265,7 +270,7 @@ export default function DashboardPage() {
                     {highPriorityIncidents?.map((report) => {
                       const isOwner = user?.uid === report.userId;
                       const hasVoted = (report.confirmations || []).includes(user?.uid ?? '') || (report.disputes || []).includes(user?.uid ?? '');
-                      const canVote = user && !isOwner && !hasVoted;
+                      const canVote = user && !isOwner && !hasVoted && report.status === 'unverified';
 
                       return (
                       <TableRow key={report.id}>
@@ -307,7 +312,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'confirmed')}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'confirmed')} disabled={report.status === 'confirmed' || isVoting}>
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -315,7 +320,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'false')}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'false')} disabled={report.status === 'false' || isVoting}>
                                         <XCircle className="h-4 w-4 text-red-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -332,7 +337,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleUserVote(report.id, 'confirm')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isVoting} onClick={() => handleUserVote(report.id, 'confirm')}>
                                         <ThumbsUp className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
@@ -340,7 +345,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote} onClick={() => handleUserVote(report.id, 'dispute')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isVoting} onClick={() => handleUserVote(report.id, 'dispute')}>
                                         <ThumbsDown className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>

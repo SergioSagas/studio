@@ -16,6 +16,8 @@ import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
+import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -121,7 +123,6 @@ export async function planSafeRoutesAction(
   }
 
   try {
-    // In a real app, you might pass real incident data.
     const cityLayoutString = `Mapa de la ciudad y conexiones: ${JSON.stringify(
       cityData.Mapa_Base_Nuevo_Chimbote
     )}`;
@@ -168,8 +169,135 @@ export async function fetchCrimePatternsAction(
   }
 }
 
-// NOTE: Reputation logic is now handled by client-side updates
-// and Firestore security rules. The server actions are no longer needed
-// for this functionality to avoid server-side auth complexity.
-// The client will directly and securely update Firestore, and the rules
-// will enforce the business logic.
+
+// --- Lógica de Reputación y Votación ---
+
+const getAdminApp = () => {
+  const appName = 'firebase-admin-app-reputation';
+  if (admin.apps.find(app => app?.name === appName)) {
+    return admin.app(appName);
+  }
+  // Durante el desarrollo, GOOGLE_APPLICATION_CREDENTIALS debe estar configurado.
+  // En producción en App Hosting, se inyectan automáticamente.
+  return admin.initializeApp(
+    {
+      credential: admin.credential.applicationDefault(),
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    },
+    appName
+  );
+};
+
+
+const voteSchema = z.object({
+  reportId: z.string(),
+  voteType: z.enum(['confirm', 'dispute']),
+  actionUserId: z.string(),
+});
+
+type VoteState = {
+  status: 'idle' | 'success' | 'error';
+  message: string;
+};
+
+const VOTE_THRESHOLD = 3;
+
+export async function castVoteAction(prevState: VoteState, formData: FormData): Promise<VoteState> {
+  const validatedFields = voteSchema.safeParse({
+    reportId: formData.get('reportId'),
+    voteType: formData.get('voteType'),
+    actionUserId: formData.get('actionUserId'),
+  });
+
+  if (!validatedFields.success) {
+    return { status: 'error', message: 'Datos de votación inválidos.' };
+  }
+
+  const { reportId, voteType, actionUserId } = validatedFields.data;
+  const adminApp = getAdminApp();
+  const firestore = adminApp.firestore();
+  const auth = adminApp.auth();
+
+  try {
+    const userRecord = await auth.getUser(actionUserId);
+    const userRole = (await firestore.collection('users').doc(actionUserId).get()).data()?.role;
+
+    const reportRef = firestore.collection('incidentReports').doc(reportId);
+    
+    await firestore.runTransaction(async (transaction) => {
+      const reportDoc = await transaction.get(reportRef);
+      if (!reportDoc.exists) {
+        throw new Error('El reporte no existe.');
+      }
+
+      const report = reportDoc.data() as IncidentReport;
+      const authorRef = firestore.collection('users').doc(report.userId);
+
+      // --- Validaciones ---
+      if (report.userId === actionUserId) {
+        throw new Error('No puedes votar en tu propio reporte.');
+      }
+      if ((report.confirmations || []).includes(actionUserId) || (report.disputes || []).includes(actionUserId)) {
+        throw new Error('Ya has votado en este reporte.');
+      }
+
+      // --- Aplicar Voto ---
+      const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
+      transaction.update(reportRef, {
+        [voteField]: FieldValue.arrayUnion(actionUserId),
+      });
+
+      // --- Lógica de Reputación y Estado ---
+      const newConfirmations = voteType === 'confirm' ? (report.confirmations || []).length + 1 : (report.confirmations || []).length;
+      const newDisputes = voteType === 'dispute' ? (report.disputes || []).length + 1 : (report.disputes || []).length;
+
+      let reputationChange = 0;
+      let newStatus: IncidentReport['status'] | null = null;
+      
+      // Lógica de confirmación
+      if (report.status === 'unverified' && voteType === 'confirm') {
+        if (userRole === 'admin') {
+          newStatus = 'confirmed';
+          reputationChange = 1;
+        } else if (newConfirmations >= VOTE_THRESHOLD) {
+          newStatus = 'confirmed';
+          reputationChange = 1;
+        }
+      }
+
+      // Lógica de disputa
+      if (report.status === 'unverified' && voteType === 'dispute') {
+        if (userRole === 'admin') {
+          newStatus = 'false';
+          reputationChange = -1;
+        } else if (newDisputes >= VOTE_THRESHOLD) {
+          newStatus = 'disputed'; // Aún no es "falso", sino "en disputa"
+          // Opcional: reducir reputación por estar en disputa
+        }
+      }
+      
+      // Si un reporte ya confirmado es disputado por un admin
+      if (report.status === 'confirmed' && voteType === 'dispute' && userRole === 'admin') {
+          newStatus = 'false';
+          reputationChange = -2; // Penalización mayor por reporte incorrecto previamente validado
+      }
+
+
+      if (newStatus) {
+        transaction.update(reportRef, { status: newStatus });
+      }
+      if (reputationChange !== 0) {
+        transaction.update(authorRef, {
+          reputation: FieldValue.increment(reputationChange),
+        });
+      }
+    });
+
+    revalidatePath('/');
+    revalidatePath('/alerts');
+    return { status: 'success', message: 'Voto registrado exitosamente.' };
+
+  } catch (error: any) {
+    return { status: 'error', message: error.message || 'Ocurrió un error al registrar el voto.' };
+  }
+}

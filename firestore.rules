@@ -2,66 +2,67 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     /**
-     * @description This ruleset enforces a role-based access control model.
-     *              It allows users to read incident reports but restricts modification to administrators.
-     * @dataStructure /users/{userId} stores user profiles with roles; /incidentReports/{incidentReportId} stores incident reports.
-     * @keySecurityDecisions Only admins can create, update, or delete incident reports.
-     *                        Users can only read incident reports. User listing is denied.
+     * @description Este conjunto de reglas impone un modelo de control de acceso basado en roles.
+     *              Permite a los usuarios leer informes de incidentes pero restringe la modificación a los administradores
+     *              o a través de acciones de voto seguras.
+     * @dataStructure /users/{userId} almacena perfiles de usuario con roles; /incidentReports/{incidentReportId} almacena informes de incidentes.
+     * @keySecurityDecisions Solo los administradores pueden crear, actualizar o eliminar directamente informes de incidentes.
+     *                        Los usuarios pueden crear informes y votar en los informes de otros, pero no modificarlos directamente.
+     *                        La lista de usuarios está denegada.
      */
 
-    // Helper function to check if the user is signed in
+    // Función auxiliar para verificar si el usuario está autenticado
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper function to check if the user is an admin
+    // Función auxiliar para obtener los datos de un usuario
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+    
+    // Función auxiliar para verificar si el usuario es un administrador
     function isAdmin() {
       return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
     }
 
-    // Helper function to get user data
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-
-    // Helper function to check if the user is the owner of a document
+    // Función auxiliar para verificar si el usuario es el propietario de un documento
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
     /**
-     * @description Manages user profile data, allowing users to read and write their own profiles.
+     * @description Gestiona los datos del perfil de usuario.
      */
     match /users/{userId} {
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      // Los usuarios solo pueden crear su propio perfil.
+      allow create: if isOwner(userId);
+      // Los usuarios solo pueden leer su propio perfil.
       allow get: if isOwner(userId);
-      allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
+      // La reputación solo puede ser modificada por el servidor (a través de Server Actions), no por el cliente.
+      // Los usuarios pueden actualizar otros campos de su propio perfil.
+      allow update: if isOwner(userId) && request.resource.data.reputation == resource.data.reputation;
+      // Nadie puede eliminar perfiles de usuario por ahora.
       allow delete: if false; 
+      // Nadie puede listar todos los usuarios.
       allow list: if false;
-
-      // Reputation can only be changed by +1 or -1, not set arbitrarily
-      allow update: if isOwner(userId) && 
-                      (request.resource.data.reputation == resource.data.reputation + 1 || 
-                       request.resource.data.reputation == resource.data.reputation - 1);
     }
 
     /**
-     * @description Manages incident reports, with community and admin validation logic.
+     * @description Gestiona los informes de incidentes, con lógica de validación comunitaria y de administrador.
      */
     match /incidentReports/{incidentReportId} {
+      // Cualquiera (autenticado o no) puede leer informes de incidentes.
       allow get, list: if true;
-      allow create: if isSignedIn(); // Any signed-in user can create a report
+      // Cualquier usuario autenticado puede crear un informe.
+      allow create: if isSignedIn();
 
-      // UPDATE LOGIC
-      // This is the definitive fix. We simplify the rule to its core logic.
-      allow update: if 
-          // An admin can always update.
-          isAdmin() ||
-          // A regular user can update IF they are not the author of the report.
-          // This implicitly allows them to cast a vote (confirm/dispute).
-          // The UI already prevents voting twice. This rule secures the backend.
-          (isSignedIn() && request.auth.uid != resource.data.userId);
+      // Las actualizaciones directas de votos están deshabilitadas. La lógica de votación ahora se maneja
+      // de forma segura a través de una Server Action.
+      // Solo los administradores pueden actualizar directamente el estado de un informe.
+      allow update: if isAdmin();
         
+      // Solo los administradores pueden eliminar informes.
       allow delete: if isAdmin();
     }
   }

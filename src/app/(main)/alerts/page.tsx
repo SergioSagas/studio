@@ -1,4 +1,5 @@
 'use client';
+import { useActionState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { type IncidentReport } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
@@ -19,11 +20,12 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, orderBy, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { castVoteAction } from '@/app/actions';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -39,29 +41,37 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
 
 function AlertCard({ report }: { report: IncidentReport }) {
   const { user } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
 
-  const isOwner = user?.uid === report.userId;
-  const hasConfirmed = (report.confirmations || []).includes(user?.uid ?? '');
-  const hasDisputed = (report.disputes || []).includes(user?.uid ?? '');
-  const canVote = user && !isOwner && !hasConfirmed && !hasDisputed;
+  const [voteState, voteAction, isVoting] = useActionState(castVoteAction, { status: 'idle', message: '' });
+
+  useEffect(() => {
+    if (voteState.status === 'success') {
+      toast({
+        title: 'Voto Registrado',
+        description: voteState.message,
+      });
+    } else if (voteState.status === 'error') {
+      toast({
+        variant: 'destructive',
+        title: 'Error al Votar',
+        description: voteState.message,
+      });
+    }
+  }, [voteState, toast]);
 
   const handleVote = (voteType: 'confirm' | 'dispute') => {
-    if (!user || !firestore || !canVote) return;
-
-    const incidentRef = doc(firestore, 'incidentReports', report.id);
-    const updateData = voteType === 'confirm' 
-      ? { confirmations: arrayUnion(user.uid) }
-      : { disputes: arrayUnion(user.uid) };
-
-    updateDocumentNonBlocking(incidentRef, updateData);
-
-    toast({
-      title: `Reporte ${voteType === 'confirm' ? 'Confirmado' : 'Disputado'}`,
-      description: 'Gracias por tu feedback.',
-    });
+    if (!user) return;
+    const formData = new FormData();
+    formData.append('reportId', report.id);
+    formData.append('voteType', voteType);
+    formData.append('actionUserId', user.uid);
+    voteAction(formData);
   };
+  
+  const isOwner = user?.uid === report.userId;
+  const hasVoted = (report.confirmations || []).includes(user?.uid ?? '') || (report.disputes || []).includes(user?.uid ?? '');
+  const canVote = user && !isOwner && !hasVoted && report.status === 'unverified';
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
   
@@ -98,11 +108,11 @@ function AlertCard({ report }: { report: IncidentReport }) {
         {user && (
           <div className="flex w-full items-center justify-between">
             <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleVote('confirm')} disabled={!canVote} aria-label="Confirmar">
+                <Button variant="outline" size="sm" onClick={() => handleVote('confirm')} disabled={!canVote || isVoting} aria-label="Confirmar">
                   <ThumbsUp className="size-4 mr-2" />
                   {(report.confirmations || []).length || 0}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleVote('dispute')} disabled={!canVote} aria-label="Disputar">
+                <Button variant="outline" size="sm" onClick={() => handleVote('dispute')} disabled={!canVote || isVoting} aria-label="Disputar">
                   <ThumbsDown className="size-4 mr-2" />
                   {(report.disputes || []).length || 0}
                 </Button>
