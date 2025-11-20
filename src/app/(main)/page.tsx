@@ -39,7 +39,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, doc, query, orderBy, limit, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
 import { castVoteAction, handleAdminReportAction } from '@/app/actions';
+import { generateNotification } from '@/ai/flows/generate-notification.flow';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -90,6 +91,8 @@ function StatCard({
   );
 }
 
+const VOTE_THRESHOLD = 3;
+
 export default function DashboardPage() {
   const { user } = useUser();
   const { role } = useUserRole();
@@ -97,30 +100,145 @@ export default function DashboardPage() {
   const firestore = useFirestore();
   const [editingReport, setEditingReport] = useState<IncidentReport | null>(null);
   const isEditModalOpen = !!editingReport;
-  const [isActionPending, setIsActionPending] = useState(false);
+  const [isActionPending, setIsActionPending] = useState<string | null>(null);
 
-  const handleAdminAction = async (reportId: string, newStatus: 'confirmed' | 'false') => {
-    if (!user) return;
-    setIsActionPending(true);
-    const result = await handleAdminReportAction({ reportId, newStatus, adminId: user.uid });
-    if (result.status === 'success') {
-      toast({ title: 'Acción completada', description: result.message });
-    } else {
-      toast({ variant: 'destructive', title: 'Error en la acción', description: result.message });
+  const handleAdminAction = async (report: IncidentReport, newStatus: 'confirmed' | 'false') => {
+    if (!user || !firestore) return;
+    setIsActionPending(report.id);
+    
+    try {
+      const reportRef = doc(firestore, 'incidentReports', report.id);
+      const authorRef = doc(firestore, 'users', report.userId);
+      const batch = writeBatch(firestore);
+
+      batch.update(reportRef, { status: newStatus });
+      
+      const actionResult = await handleAdminReportAction({ reportId: report.id, newStatus, adminId: user.uid });
+      if (actionResult.status === 'error') {
+        throw new Error(actionResult.message);
+      }
+      
+      let reputationChange = 0;
+      let notificationType: 'report_confirmed' | 'report_disputed' | null = null;
+
+      if (newStatus === 'confirmed' && report.status !== 'confirmed') {
+          reputationChange = 1;
+          notificationType = 'report_confirmed';
+      } else if (newStatus === 'false' && report.status !== 'false') {
+          reputationChange = -2;
+          notificationType = 'report_disputed';
+      }
+
+      if (reputationChange !== 0) {
+        const authorDoc = await getDoc(authorRef);
+        const authorProfile = authorDoc.data();
+        if (authorProfile) {
+          const newReputation = (authorProfile.reputation || 10) + reputationChange;
+          batch.update(authorRef, { reputation: newReputation });
+          
+          try {
+              const notificationMsg = await generateNotification({
+                  userName: authorProfile.firstName,
+                  eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
+                  newReputation: newReputation,
+              });
+              const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
+              batch.set(notificationRef, {
+                  userId: report.userId,
+                  message: notificationMsg.message,
+                  type: notificationType,
+                  timestamp: new Date().toISOString(),
+                  read: false,
+              });
+          } catch(e) {
+              console.error("Failed to generate or save notification:", e);
+          }
+        }
+      }
+
+      await batch.commit();
+      toast({ title: 'Acción completada', description: actionResult.message });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error en la acción', description: error.message });
+    } finally {
+      setIsActionPending(null);
     }
-    setIsActionPending(false);
   };
   
-  const handleUserVote = async (reportId: string, voteType: 'confirm' | 'dispute') => {
-    if (!user) return;
-    setIsActionPending(true);
-    const result = await castVoteAction({ reportId, voteType, actionUserId: user.uid });
-    if (result.status === 'success') {
-      toast({ title: 'Voto registrado', description: result.message });
-    } else {
-      toast({ variant: 'destructive', title: 'Error al votar', description: result.message });
+  const handleUserVote = async (report: IncidentReport, voteType: 'confirm' | 'dispute') => {
+    if (!user || !firestore) return;
+    setIsActionPending(report.id);
+    
+    try {
+      const reportRef = doc(firestore, 'incidentReports', report.id);
+      const authorRef = doc(firestore, 'users', report.userId);
+      const batch = writeBatch(firestore);
+
+      batch.update(reportRef, {
+        [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
+      });
+      
+      const actionResult = await castVoteAction({ reportId: report.id, voteType, actionUserId: user.uid });
+      if (actionResult.status === 'error') {
+        throw new Error(actionResult.message);
+      }
+
+      const newConfirmations = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
+      const newDisputes = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
+
+      let reputationChange = 0;
+      let newStatus: IncidentReport['status'] | null = null;
+      let notificationType: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | null = null;
+
+      if (voteType === 'confirm' && newConfirmations >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+        notificationType = 'report_confirmed';
+      }
+      if (voteType === 'dispute' && newDisputes >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
+        notificationType = 'report_disputed';
+      }
+
+      if (newStatus) {
+        batch.update(reportRef, { status: newStatus });
+      }
+
+      if (reputationChange !== 0) {
+        const authorDoc = await getDoc(authorRef);
+        const authorProfile = authorDoc.data();
+        if (authorProfile) {
+          const newReputation = (authorProfile.reputation || 10) + reputationChange;
+          batch.update(authorRef, { reputation: newReputation });
+          
+          try {
+            const notificationMsg = await generateNotification({
+              userName: authorProfile.firstName,
+              eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
+              newReputation: newReputation
+            });
+            const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
+            batch.set(notificationRef, {
+              userId: report.userId,
+              message: notificationMsg.message,
+              type: notificationType,
+              timestamp: new Date().toISOString(),
+              read: false,
+            });
+          } catch(e) {
+            console.error("Failed to generate or save notification:", e);
+          }
+        }
+      }
+
+      await batch.commit();
+      toast({ title: 'Voto registrado', description: 'Tu voto ha sido registrado con éxito.' });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error al votar', description: error.message });
+    } finally {
+      setIsActionPending(null);
     }
-    setIsActionPending(false);
   };
 
   const reportsQuery = useMemoFirebase(
@@ -274,6 +392,7 @@ export default function DashboardPage() {
                         }
                       }
                       const statusText = getStatusText(report.status);
+                      const isPending = isActionPending === report.id;
 
                       return (
                       <TableRow key={report.id}>
@@ -315,23 +434,23 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report.id, 'confirmed')} variant="ghost" size="icon" disabled={isFinalStatus || isActionPending}>
-                                          {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 text-green-600" />}
+                                      <Button onClick={() => handleAdminAction(report, 'confirmed')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
+                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 text-green-600" />}
                                       </Button>
                                       </TooltipTrigger>
                                       <TooltipContent><p>Verificar Reporte</p></TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report.id, 'false')} variant="ghost" size="icon" disabled={isFinalStatus || isActionPending}>
-                                          {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 text-red-600" />}
+                                      <Button onClick={() => handleAdminAction(report, 'false')} variant="ghost" size="icon" disabled={isFinalStatus || isPending}>
+                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 text-red-600" />}
                                       </Button>
                                       </TooltipTrigger>
                                       <TooltipContent><p>Marcar como Falso</p></TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
                                         <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(report)}>
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(report)} disabled={isPending}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                         </TooltipTrigger>
@@ -339,7 +458,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                         <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)}>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(report.id)} disabled={isPending}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
                                         </TooltipTrigger>
@@ -350,16 +469,16 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleUserVote(report.id, 'confirm')} variant="ghost" size="icon" disabled={!canVote || isActionPending}>
-                                          {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4" />}
+                                      <Button onClick={() => handleUserVote(report, 'confirm')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4" />}
                                       </Button>
                                       </TooltipTrigger>
                                       <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleUserVote(report.id, 'dispute')} variant="ghost" size="icon" disabled={!canVote || isActionPending}>
-                                          {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
+                                      <Button onClick={() => handleUserVote(report, 'dispute')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                                          {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
                                       </Button>
                                       </TooltipTrigger>
                                       <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>

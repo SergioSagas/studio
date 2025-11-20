@@ -20,13 +20,15 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, doc, arrayUnion, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { castVoteAction } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
+import { generateNotification } from '@/ai/flows/generate-notification.flow';
+
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -40,37 +42,105 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
   return <CheckCircle className="size-5 text-green-500" />;
 }
 
+const VOTE_THRESHOLD = 3;
+
 function AlertCard({ report }: { report: IncidentReport }) {
   const { user } = useUser();
   const { toast } = useToast();
   const [isVoting, setIsVoting] = useState(false);
+  const firestore = useFirestore();
 
   const handleVote = async (voteType: 'confirm' | 'dispute') => {
-    if (!user) return;
+    if (!user || !firestore) return;
     
     setIsVoting(true);
 
-    const result = await castVoteAction({
-      reportId: report.id,
-      voteType: voteType,
-      actionUserId: user.uid,
-    });
+    try {
+      const reportRef = doc(firestore, 'incidentReports', report.id);
+      const authorRef = doc(firestore, 'users', report.userId);
+      const batch = writeBatch(firestore);
 
-    if (result.status === 'success') {
+      // 1. Add the vote
+      batch.update(reportRef, {
+        [voteType === 'confirm' ? 'confirmations' : 'disputes']: arrayUnion(user.uid)
+      });
+      
+      const actionResult = await castVoteAction({
+        reportId: report.id,
+        voteType: voteType,
+        actionUserId: user.uid,
+      });
+
+      if (actionResult.status === 'error') {
+        throw new Error(actionResult.message);
+      }
+
+      // 2. Check thresholds and update status/reputation
+      const newConfirmations = (report.confirmations || []).length + (voteType === 'confirm' ? 1 : 0);
+      const newDisputes = (report.disputes || []).length + (voteType === 'dispute' ? 1 : 0);
+
+      let reputationChange = 0;
+      let newStatus: IncidentReport['status'] | null = null;
+      let notificationType: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | null = null;
+
+      if (voteType === 'confirm' && newConfirmations >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+        notificationType = 'report_confirmed';
+      }
+      if (voteType === 'dispute' && newDisputes >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
+        notificationType = 'report_disputed';
+      }
+
+      if (newStatus) {
+        batch.update(reportRef, { status: newStatus });
+      }
+
+      if (reputationChange !== 0) {
+        const authorDoc = await getDoc(authorRef);
+        const authorProfile = authorDoc.data();
+        if (authorProfile) {
+          const newReputation = (authorProfile.reputation || 10) + reputationChange;
+          batch.update(authorRef, { reputation: newReputation });
+          
+          try {
+              const notificationMsg = await generateNotification({
+                  userName: authorProfile.firstName,
+                  eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
+                  newReputation: newReputation
+              });
+              const notificationRef = doc(collection(firestore, `users/${report.userId}/notifications`));
+              batch.set(notificationRef, {
+                  userId: report.userId,
+                  message: notificationMsg.message,
+                  type: notificationType,
+                  timestamp: new Date().toISOString(),
+                  read: false,
+              });
+          } catch(e) {
+              console.error("Failed to generate or save notification:", e);
+          }
+        }
+      }
+
+      await batch.commit();
+
       toast({
         title: 'Voto Registrado',
-        description: result.message,
+        description: 'Tu voto ha sido registrado con éxito.',
       });
-    } else {
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error al Votar',
-        description: result.message,
+        description: error.message || 'No se pudo registrar tu voto.',
       });
+    } finally {
+      setIsVoting(false);
     }
-    setIsVoting(false);
   };
-
 
   const isOwner = user?.uid === report.userId;
   const confirmations = report.confirmations || [];
@@ -125,14 +195,14 @@ function AlertCard({ report }: { report: IncidentReport }) {
         {user && (
           <div className="flex w-full items-center justify-between">
             <div className="flex gap-2">
-                <Button onClick={() => handleVote('confirm')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Confirmar">
-                    {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsUp className="size-4 mr-2" />}
-                    {confirmations.length}
-                </Button>
-                <Button onClick={() => handleVote('dispute')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Disputar">
-                    {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsDown className="size-4 mr-2" />}
-                    {disputes.length}
-                </Button>
+              <Button onClick={() => handleVote('confirm')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Confirmar">
+                  {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsUp className="size-4 mr-2" />}
+                  {confirmations.length}
+              </Button>
+              <Button onClick={() => handleVote('dispute')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Disputar">
+                  {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsDown className="size-4 mr-2" />}
+                  {disputes.length}
+              </Button>
             </div>
              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
               {statusText}
