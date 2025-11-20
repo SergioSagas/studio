@@ -55,8 +55,6 @@ function AlertCard({ report }: { report: IncidentReport }) {
     setIsVoting(true);
 
     try {
-      const reportRef = doc(firestore, 'incidentReports', report.id);
-      
       // Call the server action to handle the complex logic
       await castVoteAction({
         reportId: report.id,
@@ -81,8 +79,9 @@ function AlertCard({ report }: { report: IncidentReport }) {
   };
 
   const isOwner = user?.uid === report.userId;
-  const confirmations = report.confirmations || [];
-  const disputes = report.disputes || [];
+  // Defensive check: ensure confirmations/disputes are arrays.
+  const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
+  const disputes = Array.isArray(report.disputes) ? report.disputes : [];
   const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
   const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
   const canVote = user && !isOwner && !hasVoted && !isFinalStatus;

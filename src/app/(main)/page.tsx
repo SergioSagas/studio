@@ -275,8 +275,9 @@ export default function DashboardPage() {
                   <TableBody>
                     {highPriorityIncidents?.map((report) => {
                       const isOwner = user?.uid === report.userId;
-                      const confirmations = report.confirmations || [];
-                      const disputes = report.disputes || [];
+                      // Defensive check: ensure confirmations/disputes are arrays.
+                      const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
+                      const disputes = Array.isArray(report.disputes) ? report.disputes : [];
                       const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
                       const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
                       const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
