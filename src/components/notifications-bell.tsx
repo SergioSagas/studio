@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Award, AlertCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, writeBatch, Timestamp, doc } from 'firebase/firestore';
@@ -20,7 +20,7 @@ type Notification = {
   id: string;
   message: string;
   type: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed';
-  timestamp: Timestamp; // Changed from string to Timestamp
+  timestamp: Timestamp;
   read: boolean;
 };
 
@@ -28,7 +28,6 @@ export function NotificationsBell() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isOpen, setIsOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
   
   const notificationsQuery = useMemoFirebase(
     () =>
@@ -45,16 +44,6 @@ export function NotificationsBell() {
   const { data: notifications } = useCollection<Notification>(notificationsQuery);
 
   const unreadCount = notifications?.filter(n => !n.read).length || 0;
-  
-  // Play sound on new unread notification
-  useEffect(() => {
-    if (unreadCount > 0) {
-      const latestNotification = notifications?.[0];
-      if (latestNotification && !latestNotification.read) {
-         audioRef.current?.play().catch(e => console.error("Error playing sound:", e));
-      }
-    }
-  }, [notifications, unreadCount]);
 
   const handleOpenChange = async (open: boolean) => {
     setIsOpen(open);
@@ -94,43 +83,40 @@ export function NotificationsBell() {
 
 
   return (
-    <>
-      <audio ref={audioRef} src="/sounds/success.mp3" preload="auto" />
-      <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <Badge
-                variant="destructive"
-                className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full p-0 text-xs"
-              >
-                {unreadCount}
-              </Badge>
-            )}
-            <span className="sr-only">Toggle notifications</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
-          <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {notifications && notifications.length > 0 ? (
-            notifications.map(notif => (
-              <DropdownMenuItem key={notif.id} className={cn("flex items-start gap-3 whitespace-normal", !notif.read && "font-bold")}>
-                <div className="mt-1">
-                    {getIcon(notif.type)}
-                </div>
-                <div className="flex flex-col">
-                    <p className="text-sm leading-snug">{notif.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(notif.timestamp)}</p>
-                </div>
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <p className="p-4 text-center text-sm text-muted-foreground">No tienes notificaciones.</p>
+    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <Badge
+              variant="destructive"
+              className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full p-0 text-xs"
+            >
+              {unreadCount}
+            </Badge>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+          <span className="sr-only">Toggle notifications</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {notifications && notifications.length > 0 ? (
+          notifications.map(notif => (
+            <DropdownMenuItem key={notif.id} className={cn("flex items-start gap-3 whitespace-normal", !notif.read && "font-bold")}>
+              <div className="mt-1">
+                  {getIcon(notif.type)}
+              </div>
+              <div className="flex flex-col">
+                  <p className="text-sm leading-snug">{notif.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(notif.timestamp)}</p>
+              </div>
+            </DropdownMenuItem>
+          ))
+        ) : (
+          <p className="p-4 text-center text-sm text-muted-foreground">No tienes notificaciones.</p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
