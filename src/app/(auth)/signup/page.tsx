@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -69,32 +69,61 @@ export default function SignupPage() {
       );
       const user = userCredential.user;
 
-      if (user) {
-        const userRef = doc(firestore, 'users', user.uid);
-        // Usa escritura no bloqueante para evitar que un fallo aquí bloquee al usuario.
-        setDocumentNonBlocking(userRef, {
-          firstName: data.firstName,
-          lastName: data.lastName,
-          email: data.email,
-          role: 'user',
-        }, {});
-      }
-
+      const userRef = doc(firestore, 'users', user.uid);
+      await setDoc(userRef, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        role: 'user',
+      });
+      
       toast({
         title: 'Cuenta creada',
-        description: 'Tu cuenta ha sido creada exitosamente.',
+        description: 'Tu cuenta ha sido creada exitosamente. Redirigiendo a inicio de sesión...',
       });
       router.push('/login');
+
     } catch (error: any) {
-      console.error('Signup error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error al registrarse',
-        description:
-          error.code === 'auth/email-already-in-use'
-            ? 'Este correo electrónico ya está en uso.'
-            : 'Ocurrió un error. Por favor, inténtalo de nuevo.',
-      });
+      if (error.code === 'auth/email-already-in-use') {
+        toast({
+            variant: 'destructive',
+            title: 'Correo ya registrado',
+            description: 'Este correo ya está en uso. Intenta iniciar sesión.',
+        });
+        // Opcional: Podrías intentar "reparar" un usuario huérfano aquí,
+        // pero por ahora solo notificamos al usuario.
+        // Por ejemplo, podrías intentar iniciar sesión para obtener el UID y luego verificar si el doc existe.
+        try {
+            const credential = await signInWithEmailAndPassword(auth, data.email, data.password);
+            const user = credential.user;
+            const userRef = doc(firestore, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
+
+            if (!userDoc.exists()) {
+                await setDoc(userRef, {
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    email: data.email,
+                    role: 'user',
+                });
+                toast({
+                    title: 'Perfil de usuario restaurado',
+                    description: 'Hemos completado tu perfil. Ahora puedes iniciar sesión.'
+                });
+            }
+        } catch (repairError) {
+             // Si el inicio de sesión falla (contraseña incorrecta), no hacemos nada más.
+             console.error("Could not repair user profile:", repairError);
+        }
+
+      } else {
+        console.error('Signup error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error al registrarse',
+          description: 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.',
+        });
+      }
     } finally {
       setLoading(false);
     }
