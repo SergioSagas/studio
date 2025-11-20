@@ -185,9 +185,9 @@ function getAdminApp(): App {
   if (existingApp) {
     return existingApp;
   }
-  // This environment variable is automatically set by Firebase App Hosting.
-  // In a local environment, you would need to set this yourself.
-  // The service account key is securely stored and managed by App Hosting.
+  // This initialization is simplified to work in both local dev and App Hosting.
+  // In App Hosting, environment variables are automatically picked up.
+  // In local dev, it may fall back to other ADC mechanisms.
   return initializeApp(
     { projectId: firebaseConfig.projectId },
     appName
@@ -219,7 +219,8 @@ export async function confirmIncidentAction(
   }
   
   const userRecord = await auth.getUser(actionUserId);
-  const userRole = userRecord.customClaims?.role || (await firestore.collection('users').doc(actionUserId).get()).data()?.role;
+  const userDoc = await firestore.collection('users').doc(actionUserId).get();
+  const userRole = userDoc.data()?.role;
 
   const incidentRef = firestore.collection('incidentReports').doc(incidentId);
 
@@ -291,7 +292,8 @@ export async function disputeIncidentAction(
   }
 
   const userRecord = await auth.getUser(actionUserId);
-  const userRole = userRecord.customClaims?.role || (await firestore.collection('users').doc(actionUserId).get()).data()?.role;
+  const userDoc = await firestore.collection('users').doc(actionUserId).get();
+  const userRole = userDoc.data()?.role;
   
   const incidentRef = firestore.collection('incidentReports').doc(incidentId);
 
