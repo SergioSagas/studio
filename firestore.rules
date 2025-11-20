@@ -55,23 +55,25 @@ service cloud.firestore {
       // UPDATE LOGIC
       allow update: if isSignedIn() && (
         // Case 1: Admin can update any field except votes
-        (isAdmin() && !isChangingVotes(request, resource)) ||
-        // Case 2: A user can vote (update confirmations/disputes)
-        isVoting(request, resource)
+        (isAdmin() && !isChangingVotes(request)) ||
+        // Case 2: A user can vote (update confirmations/disputes) if they are not the owner and haven't voted
+        (!isAdmin() && isCastingVote(request, resource))
       );
 
       allow delete: if isAdmin();
       
-      // Helper: checks if a user is casting a vote (not owner, not already voted)
-      function isVoting(request, resource) {
+      // Helper: checks if a user is casting a vote
+      function isCastingVote(request, resource) {
         let userId = request.auth.uid;
-        let report = resource.data;
-        // A non-admin user can only vote, and cannot vote on their own report.
-        return !isAdmin() && report.userId != userId;
+        let reportBefore = resource.data;
+        let hasVoted = (reportBefore.confirmations.hasAny([userId])) || (reportBefore.disputes.hasAny([userId]));
+        let isOnlyChangingVoteFields = request.resource.data.keys().hasOnly(['confirmations', 'disputes']);
+        
+        return reportBefore.userId != userId && !hasVoted && isOnlyChangingVoteFields;
       }
       
       // Helper: checks if the admin is trying to change vote arrays
-      function isChangingVotes(request, resource) {
+      function isChangingVotes(request) {
         return request.resource.data.keys().hasAny(['confirmations', 'disputes']);
       }
     }
