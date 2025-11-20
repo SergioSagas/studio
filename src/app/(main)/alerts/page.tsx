@@ -48,10 +48,11 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const isOwner = user?.uid === report.userId;
   const hasConfirmed = (report.confirmations || []).includes(user?.uid ?? '');
   const hasDisputed = (report.disputes || []).includes(user?.uid ?? '');
-  const canVote = !isOwner && !hasConfirmed && !hasDisputed;
+  const canVote = user && !isOwner && !hasConfirmed && !hasDisputed;
 
   const handleConfirm = async () => {
-    const result = await confirmIncidentAction(report.id);
+    if (!user) return;
+    const result = await confirmIncidentAction(report.id, user.uid);
     if (result?.status === 'error') {
       toast({
         variant: 'destructive',
@@ -67,7 +68,8 @@ function AlertCard({ report }: { report: IncidentReport }) {
   };
 
   const handleDispute = async () => {
-    const result = await disputeIncidentAction(report.id);
+    if (!user) return;
+    const result = await disputeIncidentAction(report.id, user.uid);
     if (result?.status === 'error') {
       toast({
         variant: 'destructive',

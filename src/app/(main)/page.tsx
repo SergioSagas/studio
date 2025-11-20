@@ -165,7 +165,8 @@ export default function DashboardPage() {
   }
 
   const handleConfirm = async (reportId: string, isAdminAction: boolean) => {
-    const result = await confirmIncidentAction(reportId, isAdminAction);
+    if (!user) return;
+    const result = await confirmIncidentAction(reportId, user.uid, isAdminAction);
     if (result?.status === 'error') {
       toast({ variant: 'destructive', title: 'Error', description: result.message });
     } else {
@@ -174,7 +175,8 @@ export default function DashboardPage() {
   };
 
   const handleDispute = async (reportId: string, isAdminAction: boolean) => {
-    const result = await disputeIncidentAction(reportId, isAdminAction);
+    if (!user) return;
+    const result = await disputeIncidentAction(reportId, user.uid, isAdminAction);
     if (result?.status === 'error') {
       toast({ variant: 'destructive', title: 'Error', description: result.message });
     } else {
@@ -260,7 +262,7 @@ export default function DashboardPage() {
                     {highPriorityIncidents?.map((report) => {
                       const isOwner = user?.uid === report.userId;
                       const hasVoted = (report.confirmations || []).includes(user?.uid ?? '') || (report.disputes || []).includes(user?.uid ?? '');
-                      const canVote = !isOwner && !hasVoted;
+                      const canVote = user && !isOwner && !hasVoted;
 
                       return (
                       <TableRow key={report.id}>
