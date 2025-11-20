@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useUser, useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
-import { LogOut, Loader2 } from 'lucide-react';
+import { LogOut, Loader2, Award } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationsBell } from '@/components/notifications-bell';
 
 function UserMenu() {
-  const { user, isUserLoading } = useUser();
+  const { user, userProfile, isUserLoading, isProfileLoading } = useUser();
   const auth = useAuth();
   const router = useRouter();
 
@@ -43,7 +43,7 @@ function UserMenu() {
     router.push('/login');
   };
   
-  if (isUserLoading) {
+  if (isUserLoading || isProfileLoading) {
     return <Skeleton className="h-8 w-8 rounded-full" />;
   }
 
@@ -53,13 +53,14 @@ function UserMenu() {
   
   const getInitials = (name: string | null | undefined) => {
     if (!name) {
+      if(userProfile?.firstName) return userProfile.firstName[0].toUpperCase();
       if(user?.email) return user.email[0].toUpperCase();
       return 'U';
     };
     return name.split(' ').map(n => n[0]).join('');
   }
 
-  const displayName = user.displayName || user.email;
+  const displayName = userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : (user.displayName || user.email);
 
   return (
     <DropdownMenu>
@@ -81,6 +82,18 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+         {userProfile && (
+          <>
+            <div className="flex items-center justify-between px-2 py-1.5 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Award className="size-4" />
+                <span>Reputación</span>
+              </div>
+              <span className="font-semibold">{userProfile.reputation}</span>
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Cerrar sesión</span>

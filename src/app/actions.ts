@@ -343,7 +343,11 @@ export async function handleAdminReportAction(prevState: VoteState, formData: Fo
         if (!reportDoc.exists) throw new Error("El reporte no existe.");
         
         const report = reportDoc.data() as IncidentReport;
-        if (report.status === newStatus) throw new Error(`El reporte ya está en estado '${newStatus}'.`);
+        if (report.status === newStatus) {
+            // Si el estado ya es el deseado, no hacemos nada para evitar errores o lógica duplicada.
+            // Pero podríamos devolver un mensaje informativo si quisiéramos.
+            return;
+        };
 
         const authorRef = firestore.collection('users').doc(report.userId);
         const authorDoc = await transaction.get(authorRef);
