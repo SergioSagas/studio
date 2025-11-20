@@ -12,13 +12,36 @@ import {
   detectCrimePatterns,
   type DetectCrimePatternsOutput,
 } from '@/ai/flows/detect-crime-patterns.flow';
-import {
-  generateNotification,
-} from '@/ai/flows/generate-notification.flow';
+import { generateNotification } from '@/ai/flows/generate-notification.flow';
 import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cityData } from '@/lib/city-layout';
+
+// Using require for firebase-admin to avoid Next.js module resolution issues.
+const admin = require('firebase-admin');
+
+// --- Firebase Admin SDK Initialization ---
+const VOTE_THRESHOLD = 3;
+
+// Helper to initialize Firebase Admin SDK as a singleton.
+const getAdminApp = () => {
+  const appName = 'firebase-admin-app-actions';
+  // Avoid re-initializing the app on every server action.
+  const alreadyCreatedApp = admin.apps.find(
+    (app: any) => app.name === appName
+  );
+  if (alreadyCreatedApp) {
+    return alreadyCreatedApp;
+  }
+  // This simplified initialization works in App Hosting and local dev with service account env var
+  return admin.initializeApp(
+    {
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    },
+    appName
+  );
+};
 
 // Report Analysis Action
 const reportSchema = z.object({
@@ -170,10 +193,9 @@ export async function fetchCrimePatternsAction(
   }
 }
 
-
-// --- Lógica de Reputación y Votación ---
-type ActionState = {
-  status: 'idle' | 'success' | 'error';
+// --- Reputation and Voting Logic ---
+type ActionStateSimple = {
+  status: 'success' | 'error';
   message: string;
 };
 
@@ -183,33 +205,174 @@ const voteSchema = z.object({
   actionUserId: z.string(),
 });
 
-export async function castVoteAction(input: { reportId: string; voteType: 'confirm' | 'dispute'; actionUserId: string; }): Promise<ActionState> {
+export async function castVoteAction(input: {
+  reportId: string;
+  voteType: 'confirm' | 'dispute';
+  actionUserId: string;
+}): Promise<ActionStateSimple> {
   const validatedFields = voteSchema.safeParse(input);
-
   if (!validatedFields.success) {
     return { status: 'error', message: 'Datos de votación inválidos.' };
   }
-
-  revalidatePath('/');
-  revalidatePath('/alerts');
   
-  return { status: 'success', message: 'Voto registrado exitosamente.' };
+  const { reportId, voteType, actionUserId } = validatedFields.data;
+  const adminDb = getAdminApp().firestore();
+  
+  const reportRef = adminDb.collection('incidentReports').doc(reportId);
+  
+  try {
+    await adminDb.runTransaction(async (transaction: any) => {
+      const reportDoc = await transaction.get(reportRef);
+      if (!reportDoc.exists) {
+        throw new Error('El reporte no existe.');
+      }
+
+      const report = reportDoc.data();
+      const currentStatus = report.status || 'unverified';
+      if (['confirmed', 'disputed', 'false'].includes(currentStatus)) {
+        throw new Error('Este reporte ya ha sido finalizado.');
+      }
+      
+      const confirmations = report.confirmations || [];
+      const disputes = report.disputes || [];
+
+      if (
+        confirmations.includes(actionUserId) ||
+        disputes.includes(actionUserId)
+      ) {
+        throw new Error('Ya has votado en este reporte.');
+      }
+
+      const newConfirmations =
+        voteType === 'confirm'
+          ? [...confirmations, actionUserId]
+          : confirmations;
+      const newDisputes =
+        voteType === 'dispute' ? [...disputes, actionUserId] : disputes;
+
+      transaction.update(reportRef, {
+        confirmations: newConfirmations,
+        disputes: newDisputes,
+      });
+
+      // Check if threshold is met AFTER the current vote
+      const isConfirmed = newConfirmations.length >= VOTE_THRESHOLD;
+      const isDisputed = newDisputes.length >= VOTE_THRESHOLD;
+
+      if (isConfirmed || isDisputed) {
+        const newStatus = isConfirmed ? 'confirmed' : 'disputed';
+        transaction.update(reportRef, { status: newStatus });
+        
+        const authorRef = adminDb.collection('users').doc(report.userId);
+        const authorDoc = await transaction.get(authorRef);
+        
+        if (authorDoc.exists) {
+          const authorProfile = authorDoc.data();
+          const currentReputation = authorProfile.reputation ?? 10;
+          const reputationChange = isConfirmed ? 1 : -1;
+          const newReputation = currentReputation + reputationChange;
+          
+          transaction.update(authorRef, { reputation: newReputation });
+          
+          const notificationType = isConfirmed ? 'report_confirmed' : 'report_disputed';
+          const notificationResult = await generateNotification({
+            userName: authorProfile.firstName || 'Usuario',
+            eventType: notificationType,
+            newReputation: newReputation,
+          });
+
+          const notificationsRef = authorRef.collection('notifications');
+          transaction.create(notificationsRef.doc(), {
+            message: notificationResult.message,
+            type: notificationType,
+            timestamp: new Date().toISOString(),
+            read: false,
+            userId: report.userId,
+          });
+        }
+      }
+    });
+
+    revalidatePath('/');
+    revalidatePath('/alerts');
+
+    return { status: 'success', message: 'Voto registrado exitosamente.' };
+  } catch (error: any) {
+    return {
+      status: 'error',
+      message: error.message || 'Ocurrió un error al procesar tu voto.',
+    };
+  }
 }
 
 const adminActionSchema = z.object({
-    reportId: z.string(),
-    newStatus: z.enum(['confirmed', 'false']),
-    adminId: z.string(),
+  reportId: z.string(),
+  newStatus: z.enum(['confirmed', 'false']),
+  adminId: z.string(),
 });
 
-export async function handleAdminReportAction(input: { reportId: string; newStatus: 'confirmed' | 'false'; adminId: string; }): Promise<ActionState> {
+export async function handleAdminReportAction(input: {
+  reportId: string;
+  newStatus: 'confirmed' | 'false';
+  adminId: string;
+}): Promise<ActionStateSimple> {
   const validatedFields = adminActionSchema.safeParse(input);
-
   if (!validatedFields.success) {
     return { status: 'error', message: 'Datos de acción de admin inválidos.' };
   }
+
+  const { reportId, newStatus } = validatedFields.data;
+  const adminDb = getAdminApp().firestore();
   
+  const reportRef = adminDb.collection('incidentReports').doc(reportId);
+  const reportDoc = await reportRef.get();
+
+  if (!reportDoc.exists) {
+    return { status: 'error', message: 'El reporte no existe.' };
+  }
+  const report = reportDoc.data()!;
+  
+  // Prevent redundant actions
+  if (report.status === newStatus) {
+    return { status: 'error', message: `El reporte ya está marcado como ${newStatus}.` };
+  }
+
+  await reportRef.update({ status: newStatus });
+  
+  // Update author reputation
+  const authorRef = adminDb.collection('users').doc(report.userId);
+  const authorDoc = await authorRef.get();
+  if (authorDoc.exists) {
+      const authorProfile = authorDoc.data()!;
+      const currentReputation = authorProfile.reputation ?? 10;
+      const reputationChange = newStatus === 'confirmed' ? 1 : -2;
+      const newReputation = currentReputation + reputationChange;
+      
+      await authorRef.update({ reputation: newReputation });
+
+      const eventType = newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss';
+      const notificationResult = await generateNotification({
+            userName: authorProfile.firstName || 'Usuario',
+            eventType: eventType,
+            newReputation: newReputation,
+      });
+
+      await authorRef.collection('notifications').add({
+        message: notificationResult.message,
+        type: eventType,
+        timestamp: new Date().toISOString(),
+        read: false,
+        userId: report.userId,
+      });
+  }
+
+
   revalidatePath('/');
   revalidatePath('/alerts');
-  return { status: 'success', message: `Reporte marcado como ${validatedFields.data.newStatus === 'confirmed' ? 'confirmado' : 'falso'}.` };
+  return {
+    status: 'success',
+    message: `Reporte marcado como ${
+      newStatus === 'confirmed' ? 'confirmado' : 'falso'
+    }.`,
+  };
 }
