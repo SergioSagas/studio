@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +52,15 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupInput) => {
     setLoading(true);
+    if (!auth || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de configuración',
+        description: 'Los servicios de Firebase no están disponibles.',
+      });
+      setLoading(false);
+      return;
+    }
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -62,12 +71,13 @@ export default function SignupPage() {
 
       if (user) {
         const userRef = doc(firestore, 'users', user.uid);
-        await setDoc(userRef, {
+        // Usa escritura no bloqueante para evitar que un fallo aquí bloquee al usuario.
+        setDocumentNonBlocking(userRef, {
           firstName: data.firstName,
           lastName: data.lastName,
           email: data.email,
           role: 'user',
-        });
+        }, {});
       }
 
       toast({
