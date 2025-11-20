@@ -1,5 +1,5 @@
 'use client';
-import { useActionState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { type IncidentReport } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { castVoteAction } from '@/app/actions';
+import { Loader2 } from 'lucide-react';
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
   if (riskLevel === 'high') return 'destructive';
@@ -42,29 +43,40 @@ function getRiskIcon(riskLevel: IncidentReport['riskLevel']) {
 function AlertCard({ report }: { report: IncidentReport }) {
   const { user } = useUser();
   const { toast } = useToast();
+  const [isVoting, setIsVoting] = useState(false);
 
-  const [voteState, voteAction, isVoting] = useActionState(castVoteAction, { status: 'idle', message: '' });
+  const handleVote = async (voteType: 'confirm' | 'dispute') => {
+    if (!user) return;
+    
+    setIsVoting(true);
+    const formData = new FormData();
+    formData.append('reportId', report.id);
+    formData.append('voteType', voteType);
+    formData.append('actionUserId', user.uid);
 
-  useEffect(() => {
-    if (voteState.status === 'success' && voteState.message) {
+    const result = await castVoteAction(null, formData);
+
+    if (result.status === 'success') {
       toast({
         title: 'Voto Registrado',
-        description: voteState.message,
+        description: result.message,
       });
-    } else if (voteState.status === 'error') {
+    } else {
       toast({
         variant: 'destructive',
         title: 'Error al Votar',
-        description: voteState.message,
+        description: result.message,
       });
     }
-  }, [voteState, toast]);
+    setIsVoting(false);
+  };
+
 
   const isOwner = user?.uid === report.userId;
   const confirmations = report.confirmations || [];
   const disputes = report.disputes || [];
   const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
-  const isFinalStatus = ['confirmed', 'disputed', 'false'].includes(report.status);
+  const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
   const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
@@ -113,24 +125,14 @@ function AlertCard({ report }: { report: IncidentReport }) {
         {user && (
           <div className="flex w-full items-center justify-between">
             <div className="flex gap-2">
-                <form action={voteAction}>
-                    <input type="hidden" name="reportId" value={report.id} />
-                    <input type="hidden" name="voteType" value="confirm" />
-                    <input type="hidden" name="actionUserId" value={user.uid} />
-                    <Button type="submit" variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Confirmar">
-                        <ThumbsUp className="size-4 mr-2" />
-                        {confirmations.length}
-                    </Button>
-                </form>
-                <form action={voteAction}>
-                    <input type="hidden" name="reportId" value={report.id} />
-                    <input type="hidden" name="voteType" value="dispute" />
-                    <input type="hidden" name="actionUserId" value={user.uid} />
-                    <Button type="submit" variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Disputar">
-                        <ThumbsDown className="size-4 mr-2" />
-                        {disputes.length}
-                    </Button>
-                </form>
+                <Button onClick={() => handleVote('confirm')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Confirmar">
+                    {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsUp className="size-4 mr-2" />}
+                    {confirmations.length}
+                </Button>
+                <Button onClick={() => handleVote('dispute')} variant="outline" size="sm" disabled={!canVote || isVoting} aria-label="Disputar">
+                    {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsDown className="size-4 mr-2" />}
+                    {disputes.length}
+                </Button>
             </div>
              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
               {statusText}
