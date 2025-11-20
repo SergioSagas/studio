@@ -12,7 +12,6 @@ import {
   detectCrimePatterns,
   type DetectCrimePatternsOutput,
 } from '@/ai/flows/detect-crime-patterns.flow';
-import { generateNotification } from '@/ai/flows/generate-notification.flow';
 import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -230,7 +229,7 @@ export async function castVoteAction(input: {
       const report = reportDoc.data();
       const currentStatus = report.status || 'unverified';
       if (['confirmed', 'disputed', 'false'].includes(currentStatus)) {
-        throw new Error('Este reporte ya ha sido finalizado.');
+        return; // This vote can no longer alter the outcome.
       }
       
       const confirmations = report.confirmations || [];
@@ -275,15 +274,13 @@ export async function castVoteAction(input: {
           transaction.update(authorRef, { reputation: newReputation });
           
           const notificationType = isConfirmed ? 'report_confirmed' : 'report_disputed';
-          const notificationResult = await generateNotification({
-            userName: authorProfile.firstName || 'Usuario',
-            eventType: notificationType,
-            newReputation: newReputation,
-          });
+          const notificationMessage = isConfirmed
+              ? `¡Tu reporte ha sido confirmado por la comunidad! Tu reputación ha subido a ${newReputation}.`
+              : `Tu reporte ha sido disputado. Tu reputación ahora es ${newReputation}.`;
 
           const notificationsRef = authorRef.collection('notifications');
           transaction.create(notificationsRef.doc(), {
-            message: notificationResult.message,
+            message: notificationMessage,
             type: notificationType,
             timestamp: new Date().toISOString(),
             read: false,
@@ -298,6 +295,7 @@ export async function castVoteAction(input: {
 
     return { status: 'success', message: 'Voto registrado exitosamente.' };
   } catch (error: any) {
+    console.error("castVoteAction Error:", error);
     return {
       status: 'error',
       message: error.message || 'Ocurrió un error al procesar tu voto.',
@@ -332,14 +330,12 @@ export async function handleAdminReportAction(input: {
   }
   const report = reportDoc.data()!;
   
-  // Prevent redundant actions
   if (report.status === newStatus) {
     return { status: 'error', message: `El reporte ya está marcado como ${newStatus}.` };
   }
 
   await reportRef.update({ status: newStatus });
   
-  // Update author reputation
   const authorRef = adminDb.collection('users').doc(report.userId);
   const authorDoc = await authorRef.get();
   if (authorDoc.exists) {
@@ -351,14 +347,12 @@ export async function handleAdminReportAction(input: {
       await authorRef.update({ reputation: newReputation });
 
       const eventType = newStatus === 'confirmed' ? 'report_confirmed' : 'reputation_loss';
-      const notificationResult = await generateNotification({
-            userName: authorProfile.firstName || 'Usuario',
-            eventType: eventType,
-            newReputation: newReputation,
-      });
+      const notificationMessage = newStatus === 'confirmed'
+          ? `¡Un administrador ha confirmado tu reporte! Tu reputación ha subido a ${newReputation}.`
+          : `Un administrador marcó tu reporte como falso. Tu reputación ahora es ${newReputation}.`;
 
       await authorRef.collection('notifications').add({
-        message: notificationResult.message,
+        message: notificationMessage,
         type: eventType,
         timestamp: new Date().toISOString(),
         read: false,
