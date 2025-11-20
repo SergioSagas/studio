@@ -303,14 +303,14 @@ export default function DashboardPage() {
           />
         </div>
         
-        <Card className="overflow-x-auto">
+        <Card>
           <CardHeader>
             <CardTitle>Incidentes Recientes</CardTitle>
             <CardDescription>
               Un resumen de los reportes más recientes.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {isLoadingHighPriority ? (
               <Loader className='h-48' />
             ) : (
