@@ -180,7 +180,6 @@ const getAdminApp = () => {
   if (admin.apps.find((app: any) => app?.name === appName)) {
     return admin.app(appName);
   }
-  // This simplified initialization works in App Hosting and local dev with service account env var
   return admin.initializeApp({
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   }, appName);
@@ -193,19 +192,15 @@ const voteSchema = z.object({
   actionUserId: z.string(),
 });
 
-type VoteState = {
+type ActionState = {
   status: 'idle' | 'success' | 'error';
   message: string;
 };
 
 const VOTE_THRESHOLD = 3;
 
-export async function castVoteAction(prevState: VoteState, formData: FormData): Promise<VoteState> {
-  const validatedFields = voteSchema.safeParse({
-    reportId: formData.get('reportId'),
-    voteType: formData.get('voteType'),
-    actionUserId: formData.get('actionUserId'),
-  });
+export async function castVoteAction(input: { reportId: string; voteType: 'confirm' | 'dispute'; actionUserId: string; }): Promise<ActionState> {
+  const validatedFields = voteSchema.safeParse(input);
 
   if (!validatedFields.success) {
     return { status: 'error', message: 'Datos de votación inválidos.' };
@@ -236,7 +231,7 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
       if ((report.confirmations || []).includes(actionUserId) || (report.disputes || []).includes(actionUserId)) {
         throw new Error('Ya has votado en este reporte.');
       }
-       if (report.status !== 'unverified') {
+       if (report.status && report.status !== 'unverified') {
         throw new Error('Este reporte ya ha sido verificado o disputado.');
       }
 
@@ -273,7 +268,7 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
         transaction.update(reportRef, { status: newStatus });
       }
       if (reputationChange !== 0 && authorProfile) {
-        const newReputation = (authorProfile.reputation || 0) + reputationChange;
+        const newReputation = (authorProfile.reputation || 10) + reputationChange;
         transaction.update(authorRef, {
           reputation: FieldValue.increment(reputationChange),
         });
@@ -314,12 +309,8 @@ const adminActionSchema = z.object({
     adminId: z.string(),
 });
 
-export async function handleAdminReportAction(prevState: VoteState, formData: FormData): Promise<VoteState> {
-  const validatedFields = adminActionSchema.safeParse({
-    reportId: formData.get('reportId'),
-    newStatus: formData.get('newStatus'),
-    adminId: formData.get('adminId'),
-  });
+export async function handleAdminReportAction(input: { reportId: string; newStatus: 'confirmed' | 'false'; adminId: string; }): Promise<ActionState> {
+  const validatedFields = adminActionSchema.safeParse(input);
 
   if (!validatedFields.success) {
     return { status: 'error', message: 'Datos de acción de admin inválidos.' };
@@ -344,8 +335,6 @@ export async function handleAdminReportAction(prevState: VoteState, formData: Fo
         
         const report = reportDoc.data() as IncidentReport;
         if (report.status === newStatus) {
-            // If the status is already the desired one, do nothing to avoid errors or duplicate logic.
-            // But we could return an informative message if we wanted.
             return;
         };
 
@@ -367,7 +356,7 @@ export async function handleAdminReportAction(prevState: VoteState, formData: Fo
         }
 
         if (reputationChange !== 0 && authorProfile) {
-            const newReputation = (authorProfile.reputation || 0) + reputationChange;
+            const newReputation = (authorProfile.reputation || 10) + reputationChange;
             transaction.update(authorRef, {
                 reputation: FieldValue.increment(reputationChange)
             });

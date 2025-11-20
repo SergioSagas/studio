@@ -102,11 +102,7 @@ export default function DashboardPage() {
   const handleAdminAction = async (reportId: string, newStatus: 'confirmed' | 'false') => {
     if (!user) return;
     setIsActionPending(true);
-    const formData = new FormData();
-    formData.append('reportId', reportId);
-    formData.append('newStatus', newStatus);
-    formData.append('adminId', user.uid);
-    const result = await handleAdminReportAction(null, formData);
+    const result = await handleAdminReportAction({ reportId, newStatus, adminId: user.uid });
     if (result.status === 'success') {
       toast({ title: 'Acción completada', description: result.message });
     } else {
@@ -118,11 +114,7 @@ export default function DashboardPage() {
   const handleUserVote = async (reportId: string, voteType: 'confirm' | 'dispute') => {
     if (!user) return;
     setIsActionPending(true);
-    const formData = new FormData();
-    formData.append('reportId', reportId);
-    formData.append('voteType', voteType);
-    formData.append('actionUserId', user.uid);
-    const result = await castVoteAction(null, formData);
+    const result = await castVoteAction({ reportId, voteType, actionUserId: user.uid });
     if (result.status === 'success') {
       toast({ title: 'Voto registrado', description: result.message });
     } else {
@@ -189,7 +181,6 @@ export default function DashboardPage() {
   const handleEdit = (report: IncidentReport) => {
     setEditingReport(report);
   }
-
 
   return (
     <>
@@ -274,7 +265,7 @@ export default function DashboardPage() {
                       const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
                       const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
                       
-                      const getStatusText = (status: IncidentReport['status'] | undefined) => {
+                      const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
                         switch (status) {
                             case 'confirmed': return 'Confirmado';
                             case 'disputed': return 'Disputado';
@@ -324,7 +315,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report.id, 'confirmed')} variant="ghost" size="icon" disabled={report.status === 'confirmed' || isActionPending}>
+                                      <Button onClick={() => handleAdminAction(report.id, 'confirmed')} variant="ghost" size="icon" disabled={isFinalStatus || isActionPending}>
                                           {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 text-green-600" />}
                                       </Button>
                                       </TooltipTrigger>
@@ -332,7 +323,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
-                                      <Button onClick={() => handleAdminAction(report.id, 'false')} variant="ghost" size="icon" disabled={report.status === 'false' || isActionPending}>
+                                      <Button onClick={() => handleAdminAction(report.id, 'false')} variant="ghost" size="icon" disabled={isFinalStatus || isActionPending}>
                                           {isActionPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 text-red-600" />}
                                       </Button>
                                       </TooltipTrigger>

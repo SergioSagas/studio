@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { type IncidentReport } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
@@ -49,12 +49,12 @@ function AlertCard({ report }: { report: IncidentReport }) {
     if (!user) return;
     
     setIsVoting(true);
-    const formData = new FormData();
-    formData.append('reportId', report.id);
-    formData.append('voteType', voteType);
-    formData.append('actionUserId', user.uid);
 
-    const result = await castVoteAction(null, formData);
+    const result = await castVoteAction({
+      reportId: report.id,
+      voteType: voteType,
+      actionUserId: user.uid,
+    });
 
     if (result.status === 'success') {
       toast({
@@ -81,7 +81,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
   
-  const getStatusText = (status: IncidentReport['status'] | undefined) => {
+  const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
     switch (status) {
         case 'confirmed': return 'Confirmado';
         case 'disputed': return 'Disputado';
