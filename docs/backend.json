@@ -22,9 +22,13 @@
           "type": "string",
           "description": "The role of the user.",
           "enum": ["user", "admin"]
+        },
+        "reputation": {
+          "type": "number",
+          "description": "The user's reputation score, starting at 10."
         }
       },
-      "required": ["firstName", "lastName", "email", "role"]
+      "required": ["firstName", "lastName", "email", "role", "reputation"]
     },
     "IncidentReport": {
       "title": "IncidentReport",
@@ -59,6 +63,21 @@
           "type": "string",
           "description": "The date and time when the incident was reported.",
           "format": "date-time"
+        },
+        "status": {
+            "type": "string",
+            "description": "The verification status of the report.",
+            "enum": ["unverified", "confirmed", "disputed", "false"]
+        },
+        "confirmations": {
+            "type": "array",
+            "description": "List of user IDs who confirmed this report.",
+            "items": { "type": "string" }
+        },
+        "disputes": {
+            "type": "array",
+            "description": "List of user IDs who disputed this report.",
+            "items": { "type": "string" }
         }
       },
       "required": [
@@ -68,7 +87,10 @@
         "description",
         "location",
         "riskLevel",
-        "reportTime"
+        "reportTime",
+        "status",
+        "confirmations",
+        "disputes"
       ]
     }
   },

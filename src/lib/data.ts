@@ -7,6 +7,9 @@ export type IncidentReport = {
   riskLevel: 'low' | 'medium' | 'high';
   reportTime: string;
   summary: string;
+  status: 'unverified' | 'confirmed' | 'disputed' | 'false';
+  confirmations: string[];
+  disputes: string[];
 };
 
 // This data is now for type definition and backup purposes only.
@@ -20,6 +23,9 @@ export const incidentReports: Omit<IncidentReport, 'id'>[] = [
     reportTime: '2024-07-29T22:15:00.000Z',
     riskLevel: 'low',
     summary: 'Graffiti reported on park benches and walls.',
+    status: 'confirmed',
+    confirmations: ['admin_user_id'],
+    disputes: [],
   },
   {
     userId: 'system',
@@ -30,5 +36,8 @@ export const incidentReports: Omit<IncidentReport, 'id'>[] = [
     riskLevel: 'medium',
     summary:
       'An individual was reported looking into parked cars for an extended period.',
+    status: 'unverified',
+    confirmations: [],
+    disputes: [],
   },
 ];

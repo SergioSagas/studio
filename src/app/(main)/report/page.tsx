@@ -35,6 +35,9 @@ export default function NewReportPage() {
         userId: user.uid,
         location: formData.location,
         reportTime: new Date().toISOString(),
+        status: 'unverified',
+        confirmations: [],
+        disputes: [],
       };
 
       const incidentReportsRef = collection(firestore, 'incidentReports');

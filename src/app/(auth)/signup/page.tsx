@@ -78,6 +78,7 @@ export default function SignupPage() {
         lastName: data.lastName,
         email: data.email,
         role: 'user',
+        reputation: 10,
         id: user.uid,
       });
       
@@ -110,6 +111,7 @@ export default function SignupPage() {
                     lastName: data.lastName,
                     email: data.email,
                     role: 'user',
+                    reputation: 10,
                     id: user.uid,
                 });
                 toast({
