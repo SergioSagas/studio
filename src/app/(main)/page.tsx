@@ -38,7 +38,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo, useActionState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
-import { collection, doc, query, orderBy, limit, updateDoc } from 'firebase/firestore';
+import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
   Tooltip,
@@ -47,7 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EditIncidentModal } from '@/components/edit-incident-modal';
-import { castVoteAction } from '@/app/actions';
+import { castVoteAction, handleAdminReportAction } from '@/app/actions';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -98,21 +98,23 @@ export default function DashboardPage() {
   const isEditModalOpen = !!editingReport;
 
   const [voteState, voteAction, isVoting] = useActionState(castVoteAction, { status: 'idle', message: '' });
+  const [adminActionState, adminAction, isAdminActionPending] = useActionState(handleAdminReportAction, { status: 'idle', message: '' });
 
   useEffect(() => {
-    if (voteState.status === 'success' && voteState.message) {
+    const state = voteState.message ? voteState : adminActionState;
+    if (state.status === 'success' && state.message) {
       toast({
         title: 'Acción completada',
-        description: voteState.message,
+        description: state.message,
       });
-    } else if (voteState.status === 'error') {
+    } else if (state.status === 'error' && state.message) {
       toast({
         variant: 'destructive',
         title: 'Error en la acción',
-        description: voteState.message,
+        description: state.message,
       });
     }
-  }, [voteState, toast]);
+  }, [voteState, adminActionState, toast]);
 
   const reportsQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, 'incidentReports') : null),
@@ -173,15 +175,15 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
-  const handleAdminAction = async (reportId: string, status: 'confirmed' | 'false') => {
-    if (!firestore || role !== 'admin') return;
-    const incidentRef = doc(firestore, 'incidentReports', reportId);
-    await updateDoc(incidentRef, { status });
-    toast({
-      title: 'Reporte Actualizado',
-      description: `El estado del reporte se ha cambiado a ${status}.`,
-    });
+  const handleAdminActionClick = (reportId: string, status: 'confirmed' | 'false') => {
+    if (!user) return;
+    const formData = new FormData();
+    formData.append('reportId', reportId);
+    formData.append('newStatus', status);
+    formData.append('adminId', user.uid);
+    adminAction(formData);
   };
+
 
   const handleUserVote = (reportId: string, voteType: 'confirm' | 'dispute') => {
     if (!user) return;
@@ -191,6 +193,8 @@ export default function DashboardPage() {
     formData.append('actionUserId', user.uid);
     voteAction(formData);
   };
+
+  const isActionPending = isVoting || isAdminActionPending;
 
   return (
     <>
@@ -312,7 +316,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'confirmed')} disabled={report.status === 'confirmed' || isVoting}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'confirmed')} disabled={report.status === 'confirmed' || isActionPending}>
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -320,7 +324,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" onClick={() => handleAdminAction(report.id, 'false')} disabled={report.status === 'false' || isVoting}>
+                                      <Button variant="ghost" size="icon" onClick={() => handleAdminActionClick(report.id, 'false')} disabled={report.status === 'false' || isActionPending}>
                                         <XCircle className="h-4 w-4 text-red-600" />
                                       </Button>
                                     </TooltipTrigger>
@@ -337,7 +341,7 @@ export default function DashboardPage() {
                                 <>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote || isVoting} onClick={() => handleUserVote(report.id, 'confirm')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} onClick={() => handleUserVote(report.id, 'confirm')}>
                                         <ThumbsUp className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
@@ -345,7 +349,7 @@ export default function DashboardPage() {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canVote || isVoting} onClick={() => handleUserVote(report.id, 'dispute')}>
+                                      <Button variant="ghost" size="icon" disabled={!canVote || isActionPending} onClick={() => handleUserVote(report.id, 'dispute')}>
                                         <ThumbsDown className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>

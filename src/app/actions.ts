@@ -12,6 +12,9 @@ import {
   detectCrimePatterns,
   type DetectCrimePatternsOutput,
 } from '@/ai/flows/detect-crime-patterns.flow';
+import {
+  generateNotification,
+} from '@/ai/flows/generate-notification.flow';
 import type { IncidentReport } from '@/lib/data';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -177,11 +180,8 @@ const getAdminApp = () => {
   if (admin.apps.find(app => app?.name === appName)) {
     return admin.app(appName);
   }
-  // Durante el desarrollo, GOOGLE_APPLICATION_CREDENTIALS debe estar configurado.
-  // En producción en App Hosting, se inyectan automáticamente.
   return admin.initializeApp(
     {
-      credential: admin.credential.applicationDefault(),
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
     },
     appName
@@ -216,12 +216,8 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
   const { reportId, voteType, actionUserId } = validatedFields.data;
   const adminApp = getAdminApp();
   const firestore = adminApp.firestore();
-  const auth = adminApp.auth();
 
   try {
-    const userRecord = await auth.getUser(actionUserId);
-    const userRole = (await firestore.collection('users').doc(actionUserId).get()).data()?.role;
-
     const reportRef = firestore.collection('incidentReports').doc(reportId);
     
     await firestore.runTransaction(async (transaction) => {
@@ -232,6 +228,8 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
 
       const report = reportDoc.data() as IncidentReport;
       const authorRef = firestore.collection('users').doc(report.userId);
+      const authorDoc = await transaction.get(authorRef);
+      const authorProfile = authorDoc.data();
 
       // --- Validaciones ---
       if (report.userId === actionUserId) {
@@ -240,6 +238,10 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
       if ((report.confirmations || []).includes(actionUserId) || (report.disputes || []).includes(actionUserId)) {
         throw new Error('Ya has votado en este reporte.');
       }
+       if (report.status !== 'unverified') {
+        throw new Error('Este reporte ya ha sido verificado o disputado.');
+      }
+
 
       // --- Aplicar Voto ---
       const voteField = voteType === 'confirm' ? 'confirmations' : 'disputes';
@@ -253,43 +255,49 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
 
       let reputationChange = 0;
       let newStatus: IncidentReport['status'] | null = null;
+      let notificationType: 'reputation_gain' | 'reputation_loss' | 'report_confirmed' | 'report_disputed' | null = null;
       
       // Lógica de confirmación
-      if (report.status === 'unverified' && voteType === 'confirm') {
-        if (userRole === 'admin') {
-          newStatus = 'confirmed';
-          reputationChange = 1;
-        } else if (newConfirmations >= VOTE_THRESHOLD) {
-          newStatus = 'confirmed';
-          reputationChange = 1;
-        }
+      if (voteType === 'confirm' && newConfirmations >= VOTE_THRESHOLD) {
+        newStatus = 'confirmed';
+        reputationChange = 1;
+        notificationType = 'report_confirmed';
       }
 
       // Lógica de disputa
-      if (report.status === 'unverified' && voteType === 'dispute') {
-        if (userRole === 'admin') {
-          newStatus = 'false';
-          reputationChange = -1;
-        } else if (newDisputes >= VOTE_THRESHOLD) {
-          newStatus = 'disputed'; // Aún no es "falso", sino "en disputa"
-          // Opcional: reducir reputación por estar en disputa
-        }
+      if (voteType === 'dispute' && newDisputes >= VOTE_THRESHOLD) {
+        newStatus = 'disputed';
+        reputationChange = -1;
+        notificationType = 'report_disputed';
       }
-      
-      // Si un reporte ya confirmado es disputado por un admin
-      if (report.status === 'confirmed' && voteType === 'dispute' && userRole === 'admin') {
-          newStatus = 'false';
-          reputationChange = -2; // Penalización mayor por reporte incorrecto previamente validado
-      }
-
 
       if (newStatus) {
         transaction.update(reportRef, { status: newStatus });
       }
-      if (reputationChange !== 0) {
+      if (reputationChange !== 0 && authorProfile) {
+        const newReputation = (authorProfile.reputation || 0) + reputationChange;
         transaction.update(authorRef, {
           reputation: FieldValue.increment(reputationChange),
         });
+
+        // Generar notificación
+        try {
+            const notificationMsg = await generateNotification({
+                userName: authorProfile.firstName,
+                eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
+                newReputation: newReputation
+            });
+            const notificationRef = authorRef.collection('notifications').doc();
+            transaction.set(notificationRef, {
+                userId: report.userId,
+                message: notificationMsg.message,
+                type: notificationType,
+                timestamp: new Date().toISOString(),
+                read: false,
+            });
+        } catch(e) {
+            console.error("Failed to generate or save notification:", e);
+        }
       }
     });
 
@@ -299,5 +307,68 @@ export async function castVoteAction(prevState: VoteState, formData: FormData): 
 
   } catch (error: any) {
     return { status: 'error', message: error.message || 'Ocurrió un error al registrar el voto.' };
+  }
+}
+
+
+export async function handleAdminReportAction(reportId: string, newStatus: 'confirmed' | 'false', adminId: string): Promise<VoteState> {
+  const adminApp = getAdminApp();
+  const firestore = adminApp.firestore();
+
+  const reportRef = firestore.collection('incidentReports').doc(reportId);
+  
+  try {
+    await firestore.runTransaction(async (transaction) => {
+        const reportDoc = await transaction.get(reportRef);
+        if (!reportDoc.exists) throw new Error("El reporte no existe.");
+        
+        const report = reportDoc.data() as IncidentReport;
+        if (report.status === newStatus) throw new Error(`El reporte ya está en estado '${newStatus}'.`);
+
+        const authorRef = firestore.collection('users').doc(report.userId);
+        const authorDoc = await transaction.get(authorRef);
+        const authorProfile = authorDoc.data();
+        
+        transaction.update(reportRef, { status: newStatus });
+
+        let reputationChange = 0;
+        if (newStatus === 'confirmed' && report.status !== 'confirmed') {
+            reputationChange = 1;
+        } else if (newStatus === 'false' && report.status !== 'false') {
+            reputationChange = -2; // Penalización más fuerte por reporte falso
+        }
+
+        if (reputationChange !== 0 && authorProfile) {
+            const newReputation = (authorProfile.reputation || 0) + reputationChange;
+            transaction.update(authorRef, {
+                reputation: FieldValue.increment(reputationChange)
+            });
+
+             try {
+                const notificationMsg = await generateNotification({
+                    userName: authorProfile.firstName,
+                    eventType: reputationChange > 0 ? 'reputation_gain' : 'reputation_loss',
+                    newReputation: newReputation,
+                });
+                const notificationRef = authorRef.collection('notifications').doc();
+                transaction.set(notificationRef, {
+                    userId: report.userId,
+                    message: notificationMsg.message,
+                    type: newStatus === 'confirmed' ? 'report_confirmed' : 'report_disputed',
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                });
+            } catch(e) {
+                console.error("Failed to generate or save notification by admin action:", e);
+            }
+        }
+    });
+
+    revalidatePath('/');
+    revalidatePath('/alerts');
+    return { status: 'success', message: `Reporte marcado como ${newStatus}.` };
+
+  } catch (error: any) {
+    return { status: 'error', message: error.message || 'Error al actualizar el reporte.' };
   }
 }

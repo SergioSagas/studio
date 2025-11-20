@@ -92,6 +92,36 @@
         "confirmations",
         "disputes"
       ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Represents a notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this notification is for."
+        },
+        "message": {
+          "type": "string",
+          "description": "The notification message content."
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of notification (e.g., reputation_gain, reputation_loss, report_confirmed).",
+          "enum": ["reputation_gain", "reputation_loss", "report_confirmed", "report_disputed"]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the notification was created."
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the user has read the notification."
+        }
+      },
+      "required": ["userId", "message", "type", "timestamp", "read"]
     }
   },
   "auth": {
@@ -111,6 +141,12 @@
             "$ref": "#/entities/IncidentReport"
         },
         "description": "Stores all incident reports. Access is controlled by roles defined in user profiles."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+        "schema": {
+            "$ref": "#/entities/Notification"
+        },
+        "description": "Stores notifications for a specific user."
     }
   }
 }
