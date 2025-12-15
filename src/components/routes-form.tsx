@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useActionState, useState } from 'react';
+import { useEffect, useActionState } from 'react';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -118,7 +118,7 @@ export function RoutesForm({
                 </SelectTrigger>
                 <SelectContent>
                   {locations.map((location) => (
-                    <SelectItem key={`end-${location}`} value={location}>
+                    <SelectItem key={`end-${location}`} value={location} disabled={location === startLocation}>
                       {location}
                     </SelectItem>
                   ))}

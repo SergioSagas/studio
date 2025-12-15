@@ -8,8 +8,6 @@ import { Button } from './ui/button';
 import { Map as MapIcon, AlertTriangle } from 'lucide-react';
 import { cityData } from '@/lib/city-layout';
 import type L from 'leaflet';
-// Remove top-level import of the plugin
-// import 'leaflet-routing-machine';
 
 // --- Types ---
 type RoutesMapProps = {
@@ -56,9 +54,11 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
     const defaultPosition: L.LatLngTuple = [-9.122095, -78.531126];
 
     useEffect(() => {
+        let isMounted = true;
         if (mapRef.current && !mapInstance.current) {
             import('leaflet').then(L => {
-                // Dynamically import the routing machine plugin AFTER Leaflet is loaded
+                if (!isMounted) return;
+
                 import('leaflet-routing-machine');
 
                 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -78,16 +78,28 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                     Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones).forEach(([name, details]) => {
                         if (details.coordenadas) {
                             const marker = L.marker([details.coordenadas.lat, details.coordenadas.lng]).addTo(mapInstance.current!);
-                            const popupContent = document.createElement('div');
-                            popupContent.innerHTML = `<b>${name}</b><br/>`;
                             
-                            const button = document.createElement('button');
-                            button.innerHTML = 'Elegir ubicación de inicio';
-                            button.className = 'mt-2 p-2 bg-primary text-primary-foreground rounded text-xs';
-                            button.onclick = () => onLocationSelect(name);
-                            popupContent.appendChild(button);
-                            
-                            marker.bindPopup(popupContent);
+                            marker.on('click', () => {
+                                const popupContent = document.createElement('div');
+                                const isStartSet = !!startLocationName;
+                                const isEndSet = !!endLocationName;
+
+                                let buttonText = 'Elegir ubicación de inicio';
+                                if (isStartSet && !isEndSet) {
+                                    buttonText = 'Elegir ubicación final';
+                                } else if (isStartSet && isEndSet) {
+                                    buttonText = 'Reiniciar (elegir inicio)';
+                                }
+                                
+                                popupContent.innerHTML = `<b>${name}</b><br/><button class="mt-2 p-2 bg-primary text-primary-foreground rounded text-xs">${buttonText}</button>`;
+                                
+                                const button = popupContent.querySelector('button');
+                                if (button) {
+                                    button.onclick = () => onLocationSelect(name);
+                                }
+                                
+                                marker.bindPopup(popupContent).openPopup();
+                            });
                         }
                     });
                 }
@@ -98,6 +110,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
         }
         
         return () => {
+            isMounted = false;
             if (mapInstance.current) {
                 mapInstance.current.remove();
                 mapInstance.current = null;
@@ -105,59 +118,18 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
         };
     }, []); 
 
-    // Effect to update popups when startLocationName or endLocationName changes
-    useEffect(() => {
-        if (!mapInstance.current) return;
-        mapInstance.current.eachLayer(layer => {
-            if (layer instanceof L.Marker) {
-                const popup = layer.getPopup();
-                if (popup) {
-                    let htmlContent = '';
-                    const content = popup.getContent();
-                    if (typeof content === 'string') {
-                      htmlContent = content;
-                    } else if (content instanceof HTMLElement) {
-                      htmlContent = content.innerHTML;
-                    }
-
-                    const locationName = htmlContent.match(/<b>(.*?)<\/b>/)?.[1];
-
-                    if (locationName) {
-                        const isStart = locationName === startLocationName;
-                        const isEnd = locationName === endLocationName;
-                        const hasStart = !!startLocationName;
-                        
-                        const existingButton = (popup.getElement()?.querySelector('button'));
-                        if (existingButton) {
-                             if (isStart || isEnd) {
-                                existingButton.disabled = true;
-                                existingButton.style.opacity = '0.5';
-                                existingButton.innerHTML = isStart ? 'Punto de Inicio' : 'Punto Final';
-                             } else {
-                                existingButton.disabled = false;
-                                existingButton.style.opacity = '1';
-                                existingButton.innerHTML = hasStart && !endLocationName ? 'Elegir ubicación final' : 'Elegir ubicación de inicio';
-                             }
-                        }
-                    }
-                }
-            }
-        })
-
-    }, [startLocationName, endLocationName]);
-
 
     // Effect to draw the route
     useEffect(() => {
         if (mapInstance.current && routeCoordinates) {
              import('leaflet').then(L => {
                 // This ensures leaflet-routing-machine is loaded
-                if (L.Routing) {
+                 if ((L as any).Routing) {
                     if (routingControlRef.current) {
                         mapInstance.current?.removeControl(routingControlRef.current);
                     }
 
-                    routingControlRef.current = L.Routing.control({
+                    routingControlRef.current = (L as any).Routing.control({
                         waypoints: [
                             L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
                             L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])

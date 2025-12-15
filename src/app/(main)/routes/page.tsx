@@ -14,20 +14,23 @@ export default function SafeRoutesPage() {
   const [routeCoordinates, setRouteCoordinates] = useState<{ start: LatLngTuple, end: LatLngTuple } | null>(null);
 
   const handleLocationSelect = (locationName: string) => {
-    // Si el inicio está vacío, o si ambas ubicaciones ya están seleccionadas,
-    // el próximo clic debe establecer una nueva ubicación de inicio.
-    if (!startLocation || (startLocation && endLocation)) {
+    // Si ambas ubicaciones están seleccionadas, el próximo clic reinicia la ruta.
+    if (startLocation && endLocation) {
       setStartLocation(locationName);
-      setEndLocation(''); // Limpia la ubicación final para empezar una nueva ruta
-      setRouteResult(null); // Limpia los resultados anteriores
-      setRouteCoordinates(null); // Limpia las coordenadas de la ruta anterior
+      setEndLocation('');
+      setRouteResult(null);
+      setRouteCoordinates(null);
     } 
-    // Si el inicio ya está establecido pero el final no, establece la ubicación final.
-    else if (startLocation && !endLocation) {
-      // Evita seleccionar el mismo punto dos veces
-      if (locationName !== startLocation) {
-        setEndLocation(locationName);
-      }
+    // Si no hay punto de inicio, establece el punto de inicio.
+    else if (!startLocation) {
+      setStartLocation(locationName);
+      setEndLocation(''); // Asegurarse de que el final esté limpio
+      setRouteResult(null);
+      setRouteCoordinates(null);
+    } 
+    // Si hay un inicio pero no un final, y no es el mismo punto, establece el final.
+    else if (locationName !== startLocation) {
+      setEndLocation(locationName);
     }
   };
 
