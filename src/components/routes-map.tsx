@@ -112,7 +112,9 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
             if (layer instanceof L.Marker) {
                 const popup = layer.getPopup();
                 if (popup) {
-                    const locationName = (popup.getContent() as string).match(/<b>(.*?)<\/b>/)?.[1];
+                    const content = popup.getContent();
+                    const htmlContent = typeof content === 'string' ? content : (content as HTMLElement).innerHTML;
+                    const locationName = htmlContent.match(/<b>(.*?)<\/b>/)?.[1];
                     if (locationName) {
                         const newButtonText = !startLocationName ? 'Elegir ubicación de inicio' : 'Elegir ubicación final';
                         const existingButton = (popup.getElement()?.querySelector('button'));
