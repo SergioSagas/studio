@@ -36,7 +36,6 @@ type RoutesFormProps = {
     endLocation: string;
     routeResult: RecommendSafeRoutesOutput | null;
     onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
-    // Agregamos las funciones para actualizar el estado desde aquí
     onStartLocationChange: (loc: string) => void;
     onEndLocationChange: (loc: string) => void;
 }

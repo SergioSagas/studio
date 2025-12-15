@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { RoutesForm } from '@/components/routes-form';
 import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
@@ -21,7 +21,7 @@ export default function SafeRoutesPage() {
   const [routeResult, setRouteResult] = useState<RecommendSafeRoutesOutput | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<{ start: LatLngTuple, end: LatLngTuple } | null>(null);
 
-  const handleLocationSelect = (locationName: string) => {
+  const handleLocationSelect = useCallback((locationName: string) => {
     // Si ambas ubicaciones están seleccionadas, el próximo clic reinicia la ruta.
     if (startLocation && endLocation) {
       setStartLocation(locationName);
@@ -37,13 +37,23 @@ export default function SafeRoutesPage() {
     else if (locationName !== startLocation) {
       setEndLocation(locationName);
     }
-  };
+  }, [startLocation, endLocation]);
 
 
   const handleFormSubmit = (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => {
       setRouteResult(result);
       setRouteCoordinates({ start: startCoords, end: endCoords });
   }
+  
+  // Usar useCallback para estabilizar las funciones y evitar bucles de renderizado.
+  const handleStartLocationChange = useCallback((loc: string) => {
+    setStartLocation(loc);
+  }, []);
+
+  const handleEndLocationChange = useCallback((loc: string) => {
+    setEndLocation(loc);
+  }, []);
+
 
   return (
     <div className="flex flex-col gap-8">
@@ -57,8 +67,8 @@ export default function SafeRoutesPage() {
           endLocation={endLocation}
           routeResult={routeResult}
           onFormSubmit={handleFormSubmit}
-          onStartLocationChange={setStartLocation}
-          onEndLocationChange={setEndLocation}
+          onStartLocationChange={handleStartLocationChange}
+          onEndLocationChange={handleEndLocationChange}
         />
         <DynamicRoutesMap 
           onLocationSelect={handleLocationSelect}
