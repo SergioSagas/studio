@@ -1,9 +1,11 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { useState, useEffect } from 'react';
 import { Icon } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Card, CardContent } from '@/components/ui/card';
 import { cityData } from '@/lib/city-layout';
+import { Loader } from '@/components/ui/loader';
 
 // Coordenadas para centrar el mapa en Nuevo Chimbote
 const defaultPosition: [number, number] = [-9.123, -78.535];
@@ -21,6 +23,30 @@ const customIcon = new Icon({
 
 
 export function RoutesMap() {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Esta es la corrección clave: no intentamos renderizar el mapa hasta que
+  // el componente esté montado en el cliente.
+  if (!isClient) {
+    return (
+        <Card className="h-full min-h-[400px] lg:min-h-0 flex items-center justify-center">
+            <CardContent className="flex flex-col items-center gap-2">
+                <Loader />
+                <p className="text-muted-foreground text-sm">Cargando mapa...</p>
+            </CardContent>
+        </Card>
+    );
+  }
+
+  // Importamos dinámicamente los componentes de react-leaflet solo en el cliente
+  const MapContainer = require('react-leaflet').MapContainer;
+  const TileLayer = require('react-leaflet').TileLayer;
+  const Marker = require('react-leaflet').Marker;
+  const Popup = require('react-leaflet').Popup;
 
   const locationsWithCoords = Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones)
     .filter(([, details]) => details.coordenadas)
