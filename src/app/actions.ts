@@ -91,10 +91,12 @@ const routeSchema = z.object({
   transportMode: z.enum(['pedestrian', 'public_transport']),
 });
 
-type RouteState = {
+export type RouteState = {
   status: 'idle' | 'success' | 'error';
   message?: string;
   data?: RecommendSafeRoutesOutput;
+  startLocation?: string;
+  endLocation?: string;
   errors?: {
     startLocation?: string[];
     endLocation?: string[];
@@ -135,6 +137,8 @@ export async function planSafeRoutesAction(
       status: 'success',
       message: '¡Rutas seguras planeadas!',
       data: result,
+      startLocation: validatedFields.data.startLocation,
+      endLocation: validatedFields.data.endLocation
     };
   } catch (error) {
     return {

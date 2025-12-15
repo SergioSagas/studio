@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useActionState, useState } from 'react';
+import { useEffect, useActionState } from 'react';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,6 @@ import { Loader2, Route } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
 import { cityData } from '@/lib/city-layout';
-import { Input } from '@/components/ui/input';
 import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
 import type { LatLngTuple } from 'leaflet';
 
@@ -32,37 +31,19 @@ function SubmitButton() {
 }
 
 type RoutesFormProps = {
-    startLocation: string; // From parent
-    endLocation: string; // From parent
     routeResult: RecommendSafeRoutesOutput | null;
-    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple, start: string, end: string) => void;
+    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
 }
 
 export function RoutesForm({
-    startLocation: startLocationFromParent,
-    endLocation: endLocationFromParent,
     routeResult,
     onFormSubmit,
 }: RoutesFormProps) {
   const { toast } = useToast();
   
-  // Internal state for the form's selects
-  const [startLocation, setStartLocation] = useState(startLocationFromParent);
-  const [endLocation, setEndLocation] = useState(endLocationFromParent);
-
-
   const [state, formAction] = useActionState(planSafeRoutesAction, {
     status: 'idle',
   });
-
-  // Sync internal state when props from parent (map) change
-  useEffect(() => {
-    setStartLocation(startLocationFromParent);
-  }, [startLocationFromParent]);
-
-  useEffect(() => {
-    setEndLocation(endLocationFromParent);
-  }, [endLocationFromParent]);
 
 
   useEffect(() => {
@@ -72,11 +53,16 @@ export function RoutesForm({
         description: state.message,
       });
 
-      const startCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[startLocation]?.coordenadas;
-      const endCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[endLocation]?.coordenadas;
+      const startLocation = state.data.safeRoutes[0]?.routeDescription.split(' a ')[0] || '';
+      const endLocation = state.data.safeRoutes[0]?.routeDescription.split(' a ')[1]?.split(':')[0] || '';
+
+
+      const startCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[state.startLocation || '']?.coordenadas;
+      const endCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[state.endLocation || '']?.coordenadas;
+
 
       if(startCoords && endCoords) {
-          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng], startLocation, endLocation);
+          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng]);
       }
 
     } else if (state.status === 'error') {
@@ -86,7 +72,7 @@ export function RoutesForm({
         variant: 'destructive',
       });
     }
-  }, [state, toast, onFormSubmit, startLocation, endLocation]);
+  }, [state, toast, onFormSubmit]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,17 +80,15 @@ export function RoutesForm({
         <CardHeader>
           <CardTitle>Planifica Tu Viaje</CardTitle>
           <CardDescription>
-            Selecciona en el formulario o haz clic en el mapa para elegir tus puntos de inicio y fin.
+            Selecciona tus puntos de inicio y fin para encontrar la ruta más segura.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
-            <Input type="hidden" name="startLocation" value={startLocation} />
-            <Input type="hidden" name="endLocation" value={endLocation} />
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="startLocation-select">Ubicación de Inicio</Label>
-              <Select onValueChange={setStartLocation} required value={startLocation}>
-                <SelectTrigger id="startLocation-select">
+              <Label htmlFor="startLocation">Ubicación de Inicio</Label>
+              <Select name="startLocation" required>
+                <SelectTrigger id="startLocation">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
                 <SelectContent>
@@ -122,14 +106,14 @@ export function RoutesForm({
               )}
             </div>
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="endLocation-select">Ubicación Final</Label>
-               <Select onValueChange={setEndLocation} required value={endLocation}>
-                <SelectTrigger id="endLocation-select">
+              <Label htmlFor="endLocation">Ubicación Final</Label>
+               <Select name="endLocation" required>
+                <SelectTrigger id="endLocation">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
                 <SelectContent>
                   {locations.map((location) => (
-                    <SelectItem key={`end-${location}`} value={location} disabled={location === startLocation}>
+                    <SelectItem key={`end-${location}`} value={location}>
                       {location}
                     </SelectItem>
                   ))}

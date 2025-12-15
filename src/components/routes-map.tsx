@@ -11,9 +11,6 @@ import type L from 'leaflet';
 
 // --- Types ---
 type RoutesMapProps = {
-  onLocationSelect: (locationName: string) => void;
-  startLocationName?: string;
-  endLocationName?: string;
   routeCoordinates: { start: L.LatLngTuple, end: L.LatLngTuple } | null;
 };
 
@@ -46,7 +43,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, { hasError: bool
 }
 
 // --- Map Component ---
-const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, routeCoordinates }: RoutesMapProps) => {
+const MapComponent = ({ routeCoordinates }: RoutesMapProps) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<L.Map | null>(null);
     const routingControlRef = useRef<L.Routing.Control | null>(null);
@@ -58,8 +55,6 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
         if (mapRef.current && !mapInstance.current) {
             import('leaflet').then(L => {
                 if (!isMounted) return;
-
-                import('leaflet-routing-machine');
 
                 delete (L.Icon.Default.prototype as any)._getIconUrl;
                 L.Icon.Default.mergeOptions({
@@ -77,23 +72,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
 
                     Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones).forEach(([name, details]) => {
                         if (details.coordenadas) {
-                            const marker = L.marker([details.coordenadas.lat, details.coordenadas.lng]).addTo(mapInstance.current!);
-                            
-                            const popupContent = document.createElement('div');
-                            popupContent.innerHTML = `<b>${name}</b><br/><button class="map-popup-button mt-2 p-2 bg-primary text-primary-foreground rounded text-xs"></button>`;
-                            const button = popupContent.querySelector('.map-popup-button') as HTMLButtonElement;
-                            button.onclick = () => onLocationSelect(name);
-
-                            marker.bindPopup(popupContent);
-                            marker.on('popupopen', () => {
-                                let buttonText = 'Elegir ubicación de inicio';
-                                if (startLocationName && !endLocationName && startLocationName !== name) {
-                                    buttonText = 'Elegir ubicación final';
-                                } else if (startLocationName && endLocationName) {
-                                    buttonText = 'Reiniciar (elegir inicio)';
-                                }
-                                button.innerText = buttonText;
-                            });
+                            L.marker([details.coordenadas.lat, details.coordenadas.lng]).addTo(mapInstance.current!).bindPopup(`<b>${name}</b>`);
                         }
                     });
                 }
@@ -117,7 +96,6 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
     useEffect(() => {
         if (mapInstance.current && routeCoordinates) {
              import('leaflet').then(L => {
-                // This ensures leaflet-routing-machine is loaded
                  import('leaflet-routing-machine').then(() => {
                     if ((L as any).Routing) {
                         if (routingControlRef.current) {
@@ -130,18 +108,17 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                                 L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
                             ],
                             routeWhileDragging: false,
-                            show: false, // Oculta el panel de instrucciones de ruta
+                            show: false,
                             addWaypoints: false,
                             draggableWaypoints: false,
                             lineOptions: {
                                 styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
                             }
-                        }).addTo(mapInstance.current);
+                        }).addTo(mapInstance.current!);
                     }
                  });
              });
         } else if (mapInstance.current && routingControlRef.current) {
-            // If no route coordinates, remove the old route
             mapInstance.current.removeControl(routingControlRef.current);
             routingControlRef.current = null;
         }
