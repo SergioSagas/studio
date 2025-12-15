@@ -40,21 +40,13 @@ export default function SafeRoutesPage() {
   }, [startLocation, endLocation]);
 
 
-  const handleFormSubmit = (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => {
+  const handleFormSubmit = (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple, start: string, end: string) => {
       setRouteResult(result);
       setRouteCoordinates({ start: startCoords, end: endCoords });
+      setStartLocation(start);
+      setEndLocation(end);
   }
   
-  // Usar useCallback para estabilizar las funciones y evitar bucles de renderizado.
-  const handleStartLocationChange = useCallback((loc: string) => {
-    setStartLocation(loc);
-  }, []);
-
-  const handleEndLocationChange = useCallback((loc: string) => {
-    setEndLocation(loc);
-  }, []);
-
-
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -67,8 +59,6 @@ export default function SafeRoutesPage() {
           endLocation={endLocation}
           routeResult={routeResult}
           onFormSubmit={handleFormSubmit}
-          onStartLocationChange={handleStartLocationChange}
-          onEndLocationChange={handleEndLocationChange}
         />
         <DynamicRoutesMap 
           onLocationSelect={handleLocationSelect}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useActionState } from 'react';
+import { useEffect, useActionState, useState } from 'react';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -32,27 +32,38 @@ function SubmitButton() {
 }
 
 type RoutesFormProps = {
-    startLocation: string;
-    endLocation: string;
+    startLocation: string; // From parent
+    endLocation: string; // From parent
     routeResult: RecommendSafeRoutesOutput | null;
-    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
-    onStartLocationChange: (loc: string) => void;
-    onEndLocationChange: (loc: string) => void;
+    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple, start: string, end: string) => void;
 }
 
 export function RoutesForm({
-    startLocation,
-    endLocation,
+    startLocation: startLocationFromParent,
+    endLocation: endLocationFromParent,
     routeResult,
     onFormSubmit,
-    onStartLocationChange,
-    onEndLocationChange,
 }: RoutesFormProps) {
   const { toast } = useToast();
+  
+  // Internal state for the form's selects
+  const [startLocation, setStartLocation] = useState(startLocationFromParent);
+  const [endLocation, setEndLocation] = useState(endLocationFromParent);
+
 
   const [state, formAction] = useActionState(planSafeRoutesAction, {
     status: 'idle',
   });
+
+  // Sync internal state when props from parent (map) change
+  useEffect(() => {
+    setStartLocation(startLocationFromParent);
+  }, [startLocationFromParent]);
+
+  useEffect(() => {
+    setEndLocation(endLocationFromParent);
+  }, [endLocationFromParent]);
+
 
   useEffect(() => {
     if (state.status === 'success' && state.data) {
@@ -65,7 +76,7 @@ export function RoutesForm({
       const endCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[endLocation]?.coordenadas;
 
       if(startCoords && endCoords) {
-          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng]);
+          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng], startLocation, endLocation);
       }
 
     } else if (state.status === 'error') {
@@ -92,7 +103,7 @@ export function RoutesForm({
             <Input type="hidden" name="endLocation" value={endLocation} />
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="startLocation-select">Ubicación de Inicio</Label>
-              <Select onValueChange={onStartLocationChange} required value={startLocation}>
+              <Select onValueChange={setStartLocation} required value={startLocation}>
                 <SelectTrigger id="startLocation-select">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
@@ -112,7 +123,7 @@ export function RoutesForm({
             </div>
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="endLocation-select">Ubicación Final</Label>
-               <Select onValueChange={onEndLocationChange} required value={endLocation}>
+               <Select onValueChange={setEndLocation} required value={endLocation}>
                 <SelectTrigger id="endLocation-select">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
