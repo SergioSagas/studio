@@ -1,7 +1,21 @@
 'use client';
 import { PageHeader } from '@/components/page-header';
 import { RoutesForm } from '@/components/routes-form';
-import { RoutesMap } from '@/components/routes-map';
+import dynamic from 'next/dynamic';
+import { Loader } from '@/components/ui/loader';
+import { Card, CardContent } from '@/components/ui/card';
+
+const RoutesMap = dynamic(() => import('@/components/routes-map'), {
+  ssr: false,
+  loading: () => (
+    <Card className="h-full min-h-[400px] lg:min-h-0 flex items-center justify-center">
+      <CardContent className="flex flex-col items-center gap-2">
+        <Loader />
+        <p className="text-muted-foreground text-sm">Cargando mapa...</p>
+      </CardContent>
+    </Card>
+  ),
+});
 
 export default function SafeRoutesPage() {
   return (
