@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useActionState } from 'react';
-import { planSafeRoutesAction, type RouteState } from '@/app/actions';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,7 +11,6 @@ import {
 } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { RouteRecommendations } from '@/components/route-recommendations';
 import { Loader2, Route } from 'lucide-react';
 import {
   Select,
@@ -23,56 +20,28 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
-import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
-
-function SubmitButton() {
-  const [, , isPending] = useActionState<RouteState, FormData>(
-    planSafeRoutesAction,
-    { status: 'idle' }
-  );
-  return (
-    <Button type="submit" disabled={isPending} className="w-full">
-      {isPending ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <Route className="mr-2 h-4 w-4" />
-      )}
-      Encontrar Rutas Seguras
-    </Button>
-  );
-}
 
 interface RoutesFormProps {
-    onRouteResult: (result: RecommendSafeRoutesOutput | null, start?: string, end?: string) => void;
+    onRouteSubmit: (start: string, end: string) => void;
 }
 
-export function RoutesForm({ onRouteResult }: RoutesFormProps) {
-  const { toast } = useToast();
+export function RoutesForm({ onRouteSubmit }: RoutesFormProps) {
+  const [startLocation, setStartLocation] = useState('');
+  const [endLocation, setEndLocation] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [state, formAction, isPending] = useActionState<RouteState, FormData>(
-    planSafeRoutesAction,
-    {
-      status: 'idle',
-    }
-  );
-
-  useEffect(() => {
-    if (isPending) {
-        onRouteResult(null);
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!startLocation || !endLocation) {
+        // Podrías añadir un toast aquí si quieres
         return;
     }
-
-    if (state.status === 'success' && state.data) {
-      onRouteResult(state.data, state.startLocation, state.endLocation);
-    } else if (state.status === 'error') {
-      toast({
-        title: 'Planificación Fallida',
-        description: state.message,
-        variant: 'destructive',
-      });
-      onRouteResult(null); // Clear previous results on error
-    }
-  }, [state, isPending, toast, onRouteResult]);
+    setIsSubmitting(true);
+    onRouteSubmit(startLocation, endLocation);
+    // Simular un pequeño retraso para que el usuario vea el loader
+    setTimeout(() => setIsSubmitting(false), 500);
+  };
+  
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,10 +54,10 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={formAction} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="startLocation">Ubicación de Inicio</Label>
-              <Select name="startLocation" required>
+              <Select name="startLocation" required value={startLocation} onValueChange={setStartLocation}>
                 <SelectTrigger id="startLocation">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
@@ -100,15 +69,10 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              {state.errors?.startLocation && (
-                <p className="text-sm text-destructive">
-                  {state.errors.startLocation[0]}
-                </p>
-              )}
             </div>
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="endLocation">Ubicación Final</Label>
-              <Select name="endLocation" required>
+              <Select name="endLocation" required value={endLocation} onValueChange={setEndLocation}>
                 <SelectTrigger id="endLocation">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
@@ -120,11 +84,6 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              {state.errors?.endLocation && (
-                <p className="text-sm text-destructive">
-                  {state.errors.endLocation[0]}
-                </p>
-              )}
             </div>
             <div>
               <Label>Modo de Transporte</Label>
@@ -161,14 +120,17 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
                 </div>
               </RadioGroup>
             </div>
-            <SubmitButton />
+            <Button type="submit" disabled={isSubmitting || !startLocation || !endLocation} className="w-full">
+                {isSubmitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                    <Route className="mr-2 h-4 w-4" />
+                )}
+                Encontrar Rutas
+            </Button>
           </form>
         </CardContent>
       </Card>
-
-      {state.status === 'success' && state.data && (
-        <RouteRecommendations recommendations={state.data} />
-      )}
     </div>
   );
 }
