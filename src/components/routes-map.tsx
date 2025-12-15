@@ -9,7 +9,7 @@ import { cityData } from '@/lib/city-layout';
 // Coordenadas para centrar el mapa en Nuevo Chimbote
 const defaultPosition: [number, number] = [-9.123, -78.535];
 
-// Crear un icono personalizado para los marcadores
+// Crear un icono personalizado para los marcadores para evitar problemas con el empaquetado de Next.js
 const customIcon = new Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
