@@ -57,8 +57,13 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
   );
 
   useEffect(() => {
-    if (state.status === 'success') {
-      onRouteResult(state.data ?? null, state.startLocation, state.endLocation);
+    if (isPending) {
+        onRouteResult(null);
+        return;
+    }
+
+    if (state.status === 'success' && state.data) {
+      onRouteResult(state.data, state.startLocation, state.endLocation);
     } else if (state.status === 'error') {
       toast({
         title: 'Planificación Fallida',
@@ -67,7 +72,7 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
       });
       onRouteResult(null); // Clear previous results on error
     }
-  }, [state, toast, onRouteResult]);
+  }, [state, isPending, toast, onRouteResult]);
 
   return (
     <div className="flex flex-col gap-6">
