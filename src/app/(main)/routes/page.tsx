@@ -7,6 +7,9 @@ import dynamic from 'next/dynamic';
 import { useState, useCallback } from 'react';
 import { cityData } from '@/lib/city-layout';
 import type { LatLngTuple } from 'leaflet';
+import { RouteRecommendations } from '@/components/route-recommendations';
+import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
+
 
 const DynamicRoutesMap = dynamic(() => import('@/components/routes-map'), {
   ssr: false,
@@ -24,15 +27,23 @@ const getLocationCoordinates = (name: string): LatLngTuple | null => {
 
 export default function SafeRoutesPage() {
   const [routeCoordinates, setRouteCoordinates] = useState<{ start: LatLngTuple; end: LatLngTuple } | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendSafeRoutesOutput | null>(null);
 
-  const handleRouteSubmit = useCallback((startLocation: string, endLocation: string) => {
-    const startCoords = getLocationCoordinates(startLocation);
-    const endCoords = getLocationCoordinates(endLocation);
+  const handleRouteResult = useCallback((result: RecommendSafeRoutesOutput | null, start?: string, end?: string) => {
+    if (result && start && end) {
+      setRecommendations(result);
+      const startCoords = getLocationCoordinates(start);
+      const endCoords = getLocationCoordinates(end);
 
-    if (startCoords && endCoords) {
-      setRouteCoordinates({ start: startCoords, end: endCoords });
+      if (startCoords && endCoords) {
+        setRouteCoordinates({ start: startCoords, end: endCoords });
+      } else {
+        console.error('Could not find coordinates for one or both locations');
+        setRouteCoordinates(null);
+      }
     } else {
-      console.error('Could not find coordinates for one or both locations');
+      // Clear previous results if there's an error or new search
+      setRecommendations(null);
       setRouteCoordinates(null);
     }
   }, []);
@@ -44,7 +55,10 @@ export default function SafeRoutesPage() {
         description="Planifica tu viaje con análisis de seguridad impulsado por IA."
       />
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <RoutesForm onRouteSubmit={handleRouteSubmit} />
+        <div className="flex flex-col gap-6">
+            <RoutesForm onRouteResult={handleRouteResult} />
+            {recommendations && <RouteRecommendations recommendations={recommendations} />}
+        </div>
         <DynamicRoutesMap routeCoordinates={routeCoordinates} />
       </div>
     </div>
