@@ -1,120 +1,66 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import React, { Component, ErrorInfo, ReactNode, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { Icon } from 'leaflet';
+import L from 'leaflet';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cityData } from '@/lib/city-layout';
-import { AlertTriangle, Map } from 'lucide-react';
+import { Map, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/button';
 
+// Corrige el problema del icono por defecto de Leaflet con Webpack/Next.js
+delete (L.Icon.Default.prototype as any)._getIconUrl;
 
-// Crear un icono personalizado para los marcadores para evitar problemas con el empaquetado de Next.js
-const customIcon = new Icon({
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
 });
 
 
-// ---- Error Boundary Component ----
-interface ErrorBoundaryProps {
-  children: ReactNode;
-}
+const MapComponent = () => {
+    const mapRef = useRef<HTMLDivElement>(null);
+    const mapInstance = useRef<L.Map | null>(null);
+    const defaultPosition: L.LatLngTuple = [-9.123, -78.535];
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
+    useEffect(() => {
+        // Solo inicializar si el div del mapa existe y no hay una instancia del mapa ya creada
+        if (mapRef.current && !mapInstance.current) {
+            mapInstance.current = L.map(mapRef.current).setView(defaultPosition, 14);
 
-class MapErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapInstance.current);
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
+            // Añadir marcadores
+            Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones).forEach(([name, details]) => {
+                if (details.coordenadas) {
+                    L.marker([details.coordenadas.lat, details.coordenadas.lng])
+                        .addTo(mapInstance.current!)
+                        .bindPopup(`<b>${name}</b><br>${details.tipo}`);
+                }
+            });
+        }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Error al renderizar el mapa:", error, errorInfo);
-  }
+        // Función de limpieza para destruir el mapa cuando el componente se desmonte
+        return () => {
+            if (mapInstance.current) {
+                mapInstance.current.remove();
+                mapInstance.current = null;
+            }
+        };
+    }, []); // El array de dependencias vacío asegura que esto se ejecute solo una vez
 
-  render() {
-    if (this.state.hasError) {
-      return (
-         <Card className="h-full flex flex-col items-center justify-center bg-destructive/10 border-destructive/50">
-            <CardHeader className="text-center">
-                <div className="mx-auto rounded-full bg-destructive/20 p-3">
-                    <AlertTriangle className="size-8 text-destructive" />
-                </div>
-                <CardTitle className="text-destructive pt-2">Error al Cargar el Mapa</CardTitle>
-                <CardDescription className="text-destructive/80">
-                    No se pudo inicializar el componente del mapa.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <p className="text-xs text-muted-foreground">
-                    Detalle: {this.state.error?.message || 'Error desconocido.'}
-                </p>
-            </CardContent>
-        </Card>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-// ---------------------------------
-
-
-function MapComponent() {
-    const defaultPosition: [number, number] = [-9.123, -78.535];
-    const locationsWithCoords = Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones)
-        .filter(([, details]) => details.coordenadas)
-        .map(([name, details]) => ({ name, ...details }));
-        
     return (
         <Card className="h-full min-h-[400px] lg:min-h-0">
-          <CardContent className="p-0 h-full rounded-lg overflow-hidden">
-            <MapContainer
-              center={defaultPosition}
-              zoom={14}
-              scrollWheelZoom={true}
-              style={{ height: '100%', width: '100%' }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {locationsWithCoords.map((location) =>
-                location.coordenadas ? (
-                  <Marker
-                    key={location.name}
-                    position={[location.coordenadas.lat, location.coordenadas.lng]}
-                    icon={customIcon}
-                  >
-                    <Popup>
-                      {location.name} <br />{' '}
-                      <span className="text-muted-foreground text-xs">{location.tipo}</span>
-                    </Popup>
-                  </Marker>
-                ) : null
-              )}
-            </MapContainer>
-          </CardContent>
+            <CardContent className="p-0 h-full rounded-lg overflow-hidden">
+                <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+            </CardContent>
         </Card>
-    )
+    );
 }
 
-
-// Componente principal que envuelve el mapa con el Error Boundary y el botón de carga
+// Componente principal que envuelve el mapa y gestiona la carga bajo demanda
 export default function RoutesMap() {
     const [showMap, setShowMap] = useState(false);
 
@@ -135,9 +81,5 @@ export default function RoutesMap() {
         );
     }
     
-    return (
-        <MapErrorBoundary>
-            <MapComponent />
-        </MapErrorBoundary>
-    )
+    return <MapComponent />;
 }

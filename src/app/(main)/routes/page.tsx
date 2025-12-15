@@ -5,7 +5,6 @@ import { RoutesForm } from '@/components/routes-form';
 import RoutesMap from '@/components/routes-map';
 
 export default function SafeRoutesPage() {
-
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
