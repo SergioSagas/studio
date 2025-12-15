@@ -1,5 +1,7 @@
+'use client';
 import { PageHeader } from '@/components/page-header';
 import { RoutesForm } from '@/components/routes-form';
+import { RoutesMap } from '@/components/routes-map';
 
 export default function SafeRoutesPage() {
   return (
@@ -8,7 +10,10 @@ export default function SafeRoutesPage() {
         title="Recomendaciones de Rutas Seguras"
         description="Planifica tu viaje con análisis de seguridad impulsado por IA."
       />
-      <RoutesForm />
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <RoutesForm />
+        <RoutesMap />
+      </div>
     </div>
   );
 }

@@ -53,7 +53,7 @@ export function RoutesForm() {
   }, [state, toast]);
 
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Planifica Tu Viaje</CardTitle>
@@ -140,27 +140,10 @@ export function RoutesForm() {
           </form>
         </CardContent>
       </Card>
-      <div>
-        {state.status === 'success' && state.data ? (
+      
+      {state.status === 'success' && state.data && (
           <RouteRecommendations recommendations={state.data} />
-        ) : (
-          <Card className="flex min-h-[400px] flex-col items-center justify-center text-center">
-             <CardHeader>
-                <CardTitle>Esperando Plan de Ruta</CardTitle>
-                <CardDescription>
-                    Tus rutas generadas por IA aparecerán aquí.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-full bg-muted p-4">
-                    <svg className="mx-auto size-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 16.382V5.618a1 1 0 00-.553-.894L15 2m-6 5l6-3m-6 5l6 3" />
-                    </svg>
-                </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      )}
     </div>
   );
 }

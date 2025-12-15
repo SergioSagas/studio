@@ -2,10 +2,20 @@
 // La IA utilizará esta información para entender cómo se relacionan las ubicaciones,
 // sus tipos, y las distancias para generar recomendaciones de rutas más lógicas.
 
-export const cityData = {
+type Location = {
+  tipo: string;
+  coordenadas?: { lat: number; lng: number; };
+};
+
+type Locations = {
+  [key: string]: Location;
+};
+
+
+export const cityData: { Mapa_Base_Nuevo_Chimbote: { ubicaciones: Locations, conexiones: any } } = {
   "Mapa_Base_Nuevo_Chimbote": {
     "ubicaciones": {
-      "Plaza Mayor de Nuevo Chimbote": { "tipo": "Plaza / centro urbano" },
+      "Plaza Mayor de Nuevo Chimbote": { "tipo": "Plaza / centro urbano", "coordenadas": { "lat": -9.1085, "lng": -78.5367 } },
       "Municipalidad Distrital de Nuevo Chimbote": { "tipo": "Entidad municipal / centro administrativo" },
       "Catedral Nuestra Señora del Carmen y San Pedro Apóstol": { "tipo": "Iglesia / monumento" },
       "Óvalo de la Familia": { "tipo": "Rotonda / intersección vial" },
@@ -310,5 +320,3 @@ export const cityData = {
     }
   }
 }
-
-    
