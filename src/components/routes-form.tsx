@@ -33,20 +33,21 @@ function SubmitButton() {
 
 type RoutesFormProps = {
     startLocation: string;
-    setStartLocation: (loc: string) => void;
     endLocation: string;
-    setEndLocation: (loc: string) => void;
     routeResult: RecommendSafeRoutesOutput | null;
     onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
+    // Agregamos las funciones para actualizar el estado desde aquí
+    onStartLocationChange: (loc: string) => void;
+    onEndLocationChange: (loc: string) => void;
 }
 
 export function RoutesForm({
     startLocation,
-    setStartLocation,
     endLocation,
-    setEndLocation,
     routeResult,
     onFormSubmit,
+    onStartLocationChange,
+    onEndLocationChange,
 }: RoutesFormProps) {
   const { toast } = useToast();
 
@@ -92,7 +93,7 @@ export function RoutesForm({
             <Input type="hidden" name="endLocation" value={endLocation} />
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="startLocation-select">Ubicación de Inicio</Label>
-              <Select onValueChange={setStartLocation} required value={startLocation}>
+              <Select onValueChange={onStartLocationChange} required value={startLocation}>
                 <SelectTrigger id="startLocation-select">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
@@ -112,7 +113,7 @@ export function RoutesForm({
             </div>
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="endLocation-select">Ubicación Final</Label>
-               <Select onValueChange={setEndLocation} required value={endLocation}>
+               <Select onValueChange={onEndLocationChange} required value={endLocation}>
                 <SelectTrigger id="endLocation-select">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>

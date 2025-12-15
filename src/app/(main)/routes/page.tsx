@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { RoutesForm } from '@/components/routes-form';
-import RoutesMap from '@/components/routes-map';
 import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
 import type { LatLngTuple } from 'leaflet';
 import { Loader } from '@/components/ui/loader';
@@ -33,9 +32,6 @@ export default function SafeRoutesPage() {
     // Si no hay punto de inicio, establece el punto de inicio.
     else if (!startLocation) {
       setStartLocation(locationName);
-      setEndLocation(''); // Asegurarse de que el final esté limpio
-      setRouteResult(null);
-      setRouteCoordinates(null);
     } 
     // Si hay un inicio pero no un final, y no es el mismo punto, establece el final.
     else if (locationName !== startLocation) {
@@ -58,11 +54,11 @@ export default function SafeRoutesPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <RoutesForm
           startLocation={startLocation}
-          setStartLocation={setStartLocation}
           endLocation={endLocation}
-          setEndLocation={setEndLocation}
           routeResult={routeResult}
           onFormSubmit={handleFormSubmit}
+          onStartLocationChange={setStartLocation}
+          onEndLocationChange={setEndLocation}
         />
         <DynamicRoutesMap 
           onLocationSelect={handleLocationSelect}
