@@ -82,7 +82,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                             popupContent.innerHTML = `<b>${name}</b><br/>`;
                             
                             const button = document.createElement('button');
-                            button.innerHTML = 'Elegir como inicio';
+                            button.innerHTML = 'Elegir ubicación de inicio';
                             button.className = 'mt-2 p-2 bg-primary text-primary-foreground rounded text-xs';
                             button.onclick = () => onLocationSelect(name);
                             popupContent.appendChild(button);
@@ -112,8 +112,8 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
             if (layer instanceof L.Marker) {
                 const popup = layer.getPopup();
                 if (popup) {
-                    const content = popup.getContent();
                     let htmlContent = '';
+                    const content = popup.getContent();
                     if (typeof content === 'string') {
                       htmlContent = content;
                     } else if (content instanceof HTMLElement) {
@@ -136,7 +136,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                              } else {
                                 existingButton.disabled = false;
                                 existingButton.style.opacity = '1';
-                                existingButton.innerHTML = hasStart ? 'Elegir como final' : 'Elegir como inicio';
+                                existingButton.innerHTML = hasStart && !endLocationName ? 'Elegir ubicación final' : 'Elegir ubicación de inicio';
                              }
                         }
                     }
