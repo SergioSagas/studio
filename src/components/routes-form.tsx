@@ -1,23 +1,34 @@
 'use client';
 
 import { useEffect, useActionState } from 'react';
-import { planSafeRoutesAction } from '@/app/actions';
+import { planSafeRoutesAction, type RouteState } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { RouteRecommendations } from '@/components/route-recommendations';
 import { Loader2, Route } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { locations } from '@/lib/locations';
-import { cityData } from '@/lib/city-layout';
-import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
-import type { LatLngTuple } from 'leaflet';
-
 
 function SubmitButton() {
-  const [,,isPending] = useActionState(planSafeRoutesAction, { status: 'idle' });
+  const [, , isPending] = useActionState<RouteState, FormData>(
+    planSafeRoutesAction,
+    { status: 'idle' }
+  );
   return (
     <Button type="submit" disabled={isPending} className="w-full">
       {isPending ? (
@@ -30,49 +41,26 @@ function SubmitButton() {
   );
 }
 
-type RoutesFormProps = {
-    routeResult: RecommendSafeRoutesOutput | null;
-    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
-}
-
-export function RoutesForm({
-    routeResult,
-    onFormSubmit,
-}: RoutesFormProps) {
+// El formulario ahora es completamente autónomo y no recibe props para su estado.
+export function RoutesForm() {
   const { toast } = useToast();
-  
-  const [state, formAction] = useActionState(planSafeRoutesAction, {
-    status: 'idle',
-  });
 
+  const [state, formAction] = useActionState<RouteState, FormData>(
+    planSafeRoutesAction,
+    {
+      status: 'idle',
+    }
+  );
 
   useEffect(() => {
-    if (state.status === 'success' && state.data) {
-      toast({
-        title: 'Plan de Ruta Listo',
-        description: state.message,
-      });
-
-      const startLocation = state.data.safeRoutes[0]?.routeDescription.split(' a ')[0] || '';
-      const endLocation = state.data.safeRoutes[0]?.routeDescription.split(' a ')[1]?.split(':')[0] || '';
-
-
-      const startCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[state.startLocation || '']?.coordenadas;
-      const endCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[state.endLocation || '']?.coordenadas;
-
-
-      if(startCoords && endCoords) {
-          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng]);
-      }
-
-    } else if (state.status === 'error') {
+    if (state.status === 'error') {
       toast({
         title: 'Planificación Fallida',
         description: state.message,
         variant: 'destructive',
       });
     }
-  }, [state, toast, onFormSubmit]);
+  }, [state, toast]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +68,8 @@ export function RoutesForm({
         <CardHeader>
           <CardTitle>Planifica Tu Viaje</CardTitle>
           <CardDescription>
-            Selecciona tus puntos de inicio y fin para encontrar la ruta más segura.
+            Selecciona tus puntos de inicio y fin para encontrar la ruta más
+            segura.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -107,7 +96,7 @@ export function RoutesForm({
             </div>
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="endLocation">Ubicación Final</Label>
-               <Select name="endLocation" required>
+              <Select name="endLocation" required>
                 <SelectTrigger id="endLocation">
                   <SelectValue placeholder="Selecciona una ubicación" />
                 </SelectTrigger>
@@ -133,7 +122,11 @@ export function RoutesForm({
                 className="mt-2 grid grid-cols-2 gap-4"
               >
                 <div>
-                  <RadioGroupItem value="pedestrian" id="pedestrian" className="peer sr-only" />
+                  <RadioGroupItem
+                    value="pedestrian"
+                    id="pedestrian"
+                    className="peer sr-only"
+                  />
                   <Label
                     htmlFor="pedestrian"
                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -160,9 +153,9 @@ export function RoutesForm({
           </form>
         </CardContent>
       </Card>
-      
-      {state.status === 'success' && routeResult && (
-          <RouteRecommendations recommendations={routeResult} />
+
+      {state.status === 'success' && state.data && (
+        <RouteRecommendations recommendations={state.data} />
       )}
     </div>
   );
