@@ -15,10 +15,10 @@ type Locations = {
 export const cityData: { Mapa_Base_Nuevo_Chimbote: { ubicaciones: Locations, conexiones: any } } = {
   "Mapa_Base_Nuevo_Chimbote": {
     "ubicaciones": {
-      "Plaza Mayor de Nuevo Chimbote": { "tipo": "Plaza / centro urbano", "coordenadas": { "lat": -9.1085, "lng": -78.5367 } },
+      "Plaza Mayor de Nuevo Chimbote": { "tipo": "Plaza / centro urbano", "coordenadas": { "lat": -9.122095, "lng": -78.531126 } },
       "Municipalidad Distrital de Nuevo Chimbote": { "tipo": "Entidad municipal / centro administrativo" },
       "Catedral Nuestra Señora del Carmen y San Pedro Apóstol": { "tipo": "Iglesia / monumento" },
-      "Óvalo de la Familia": { "tipo": "Rotonda / intersección vial" },
+      "Óvalo de la Familia": { "tipo": "Rotonda / intersección vial", "coordenadas": { "lat": -9.128450, "lng": -78.516868 } },
       "Buenos Aires": { "tipo": "Urbanización / zona central" },
       "Playa Atahualpa": { "tipo": "Playa / costa" },
       "Malecón Grau": { "tipo": "Malecón / paseo costero" },
