@@ -1,12 +1,13 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cityData } from '@/lib/city-layout';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Map } from 'lucide-react';
+import { Button } from './ui/button';
 
 
 // Crear un icono personalizado para los marcadores para evitar problemas con el empaquetado de Next.js
@@ -38,18 +39,15 @@ class MapErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState>
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Actualiza el estado para que el siguiente renderizado muestre la interfaz de repuesto.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // También puedes registrar el error en un servicio de reporte de errores
     console.error("Error al renderizar el mapa:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      // Puedes renderizar cualquier interfaz de repuesto
       return (
          <Card className="h-full flex flex-col items-center justify-center bg-destructive/10 border-destructive/50">
             <CardHeader className="text-center">
@@ -116,8 +114,27 @@ function MapComponent() {
 }
 
 
-// Componente principal que envuelve el mapa con el Error Boundary
+// Componente principal que envuelve el mapa con el Error Boundary y el botón de carga
 export default function RoutesMap() {
+    const [showMap, setShowMap] = useState(false);
+
+    if (!showMap) {
+        return (
+            <Card className="h-full flex flex-col items-center justify-center">
+              <CardContent className="text-center">
+                <Map className="mx-auto size-12 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-semibold">Visualiza el Mapa</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Haz clic en el botón para cargar el mapa interactivo de la ciudad.
+                </p>
+                <Button onClick={() => setShowMap(true)} className="mt-4">
+                  Mostrar Mapa
+                </Button>
+              </CardContent>
+            </Card>
+        );
+    }
+    
     return (
         <MapErrorBoundary>
             <MapComponent />
