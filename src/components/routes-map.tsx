@@ -8,7 +8,8 @@ import { Button } from './ui/button';
 import { Map as MapIcon, AlertTriangle } from 'lucide-react';
 import { cityData } from '@/lib/city-layout';
 import type L from 'leaflet';
-import 'leaflet-routing-machine';
+// Remove top-level import of the plugin
+// import 'leaflet-routing-machine';
 
 // --- Types ---
 type RoutesMapProps = {
@@ -57,6 +58,9 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
     useEffect(() => {
         if (mapRef.current && !mapInstance.current) {
             import('leaflet').then(L => {
+                // Dynamically import the routing machine plugin AFTER Leaflet is loaded
+                import('leaflet-routing-machine');
+
                 delete (L.Icon.Default.prototype as any)._getIconUrl;
                 L.Icon.Default.mergeOptions({
                     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -89,6 +93,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                 }
             }).catch(err => {
                 console.error("Failed to load Leaflet", err);
+                throw new Error("Failed to load Leaflet. See console for details.");
             });
         }
         
