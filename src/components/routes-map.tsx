@@ -82,7 +82,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                             popupContent.innerHTML = `<b>${name}</b><br/>`;
                             
                             const button = document.createElement('button');
-                            button.innerHTML = !startLocationName ? 'Elegir ubicación de inicio' : 'Elegir ubicación final';
+                            button.innerHTML = 'Elegir como inicio';
                             button.className = 'mt-2 p-2 bg-primary text-primary-foreground rounded text-xs';
                             button.onclick = () => onLocationSelect(name);
                             popupContent.appendChild(button);
@@ -105,7 +105,7 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
         };
     }, []); 
 
-    // Effect to update popups when startLocationName changes
+    // Effect to update popups when startLocationName or endLocationName changes
     useEffect(() => {
         if (!mapInstance.current) return;
         mapInstance.current.eachLayer(layer => {
@@ -113,19 +113,30 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                 const popup = layer.getPopup();
                 if (popup) {
                     const content = popup.getContent();
-                    const htmlContent = typeof content === 'string' ? content : (content as HTMLElement).innerHTML;
+                    let htmlContent = '';
+                    if (typeof content === 'string') {
+                      htmlContent = content;
+                    } else if (content instanceof HTMLElement) {
+                      htmlContent = content.innerHTML;
+                    }
+
                     const locationName = htmlContent.match(/<b>(.*?)<\/b>/)?.[1];
+
                     if (locationName) {
-                        const newButtonText = !startLocationName ? 'Elegir ubicación de inicio' : 'Elegir ubicación final';
+                        const isStart = locationName === startLocationName;
+                        const isEnd = locationName === endLocationName;
+                        const hasStart = !!startLocationName;
+                        
                         const existingButton = (popup.getElement()?.querySelector('button'));
                         if (existingButton) {
-                             existingButton.innerHTML = newButtonText;
-                             if(locationName === startLocationName || locationName === endLocationName) {
+                             if (isStart || isEnd) {
                                 existingButton.disabled = true;
                                 existingButton.style.opacity = '0.5';
+                                existingButton.innerHTML = isStart ? 'Punto de Inicio' : 'Punto Final';
                              } else {
                                 existingButton.disabled = false;
                                 existingButton.style.opacity = '1';
+                                existingButton.innerHTML = hasStart ? 'Elegir como final' : 'Elegir como inicio';
                              }
                         }
                     }
@@ -140,24 +151,31 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
     useEffect(() => {
         if (mapInstance.current && routeCoordinates) {
              import('leaflet').then(L => {
-                if (routingControlRef.current) {
-                    mapInstance.current?.removeControl(routingControlRef.current);
-                }
-
-                routingControlRef.current = L.Routing.control({
-                    waypoints: [
-                        L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
-                        L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
-                    ],
-                    routeWhileDragging: false,
-                    show: false, // Oculta el panel de instrucciones de ruta
-                    addWaypoints: false,
-                    draggableWaypoints: false,
-                    lineOptions: {
-                        styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
+                // This ensures leaflet-routing-machine is loaded
+                if (L.Routing) {
+                    if (routingControlRef.current) {
+                        mapInstance.current?.removeControl(routingControlRef.current);
                     }
-                }).addTo(mapInstance.current);
+
+                    routingControlRef.current = L.Routing.control({
+                        waypoints: [
+                            L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
+                            L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
+                        ],
+                        routeWhileDragging: false,
+                        show: false, // Oculta el panel de instrucciones de ruta
+                        addWaypoints: false,
+                        draggableWaypoints: false,
+                        lineOptions: {
+                            styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
+                        }
+                    }).addTo(mapInstance.current);
+                }
              });
+        } else if (mapInstance.current && routingControlRef.current) {
+            // If no route coordinates, remove the old route
+            mapInstance.current.removeControl(routingControlRef.current);
+            routingControlRef.current = null;
         }
     }, [routeCoordinates]);
 
