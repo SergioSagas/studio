@@ -4,15 +4,15 @@ import { RoutesForm } from '@/components/routes-form';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 
-export default function SafeRoutesPage() {
-  const RoutesMap = useMemo(() => dynamic(
-    () => import('@/components/routes-map').then((mod) => mod.RoutesMap),
-    { 
-      loading: () => <p>Cargando mapa...</p>,
-      ssr: false 
-    }
-  ), []);
+const RoutesMap = dynamic(
+  () => import('@/components/routes-map').then((mod) => mod.RoutesMap),
+  {
+    loading: () => <p>Cargando mapa...</p>,
+    ssr: false,
+  }
+);
 
+export default function SafeRoutesPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
