@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
+import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
 
 function SubmitButton() {
   const [, , isPending] = useActionState<RouteState, FormData>(
@@ -41,11 +42,14 @@ function SubmitButton() {
   );
 }
 
-// El formulario ahora es completamente autónomo y no recibe props para su estado.
-export function RoutesForm() {
+interface RoutesFormProps {
+    onRouteResult: (result: RecommendSafeRoutesOutput | null, start?: string, end?: string) => void;
+}
+
+export function RoutesForm({ onRouteResult }: RoutesFormProps) {
   const { toast } = useToast();
 
-  const [state, formAction] = useActionState<RouteState, FormData>(
+  const [state, formAction, isPending] = useActionState<RouteState, FormData>(
     planSafeRoutesAction,
     {
       status: 'idle',
@@ -53,14 +57,17 @@ export function RoutesForm() {
   );
 
   useEffect(() => {
-    if (state.status === 'error') {
+    if (state.status === 'success') {
+      onRouteResult(state.data ?? null, state.startLocation, state.endLocation);
+    } else if (state.status === 'error') {
       toast({
         title: 'Planificación Fallida',
         description: state.message,
         variant: 'destructive',
       });
+      onRouteResult(null); // Clear previous results on error
     }
-  }, [state, toast]);
+  }, [state, toast, onRouteResult]);
 
   return (
     <div className="flex flex-col gap-6">
