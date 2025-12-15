@@ -6,6 +6,15 @@ import { RoutesForm } from '@/components/routes-form';
 import RoutesMap from '@/components/routes-map';
 import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
 import type { LatLngTuple } from 'leaflet';
+import { Loader } from '@/components/ui/loader';
+import dynamic from 'next/dynamic';
+
+
+const DynamicRoutesMap = dynamic(() => import('@/components/routes-map'), {
+  ssr: false,
+  loading: () => <Loader className="h-full min-h-[400px]" />,
+});
+
 
 export default function SafeRoutesPage() {
   const [startLocation, setStartLocation] = useState('');
@@ -55,7 +64,7 @@ export default function SafeRoutesPage() {
           routeResult={routeResult}
           onFormSubmit={handleFormSubmit}
         />
-        <RoutesMap 
+        <DynamicRoutesMap 
           onLocationSelect={handleLocationSelect}
           startLocationName={startLocation}
           endLocationName={endLocation}

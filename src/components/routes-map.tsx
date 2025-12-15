@@ -79,26 +79,20 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
                         if (details.coordenadas) {
                             const marker = L.marker([details.coordenadas.lat, details.coordenadas.lng]).addTo(mapInstance.current!);
                             
-                            marker.on('click', () => {
-                                const popupContent = document.createElement('div');
-                                const isStartSet = !!startLocationName;
-                                const isEndSet = !!endLocationName;
+                            const popupContent = document.createElement('div');
+                            popupContent.innerHTML = `<b>${name}</b><br/><button class="map-popup-button mt-2 p-2 bg-primary text-primary-foreground rounded text-xs"></button>`;
+                            const button = popupContent.querySelector('.map-popup-button') as HTMLButtonElement;
+                            button.onclick = () => onLocationSelect(name);
 
+                            marker.bindPopup(popupContent);
+                            marker.on('popupopen', () => {
                                 let buttonText = 'Elegir ubicación de inicio';
-                                if (isStartSet && !isEndSet) {
+                                if (startLocationName && !endLocationName && startLocationName !== name) {
                                     buttonText = 'Elegir ubicación final';
-                                } else if (isStartSet && isEndSet) {
+                                } else if (startLocationName && endLocationName) {
                                     buttonText = 'Reiniciar (elegir inicio)';
                                 }
-                                
-                                popupContent.innerHTML = `<b>${name}</b><br/><button class="mt-2 p-2 bg-primary text-primary-foreground rounded text-xs">${buttonText}</button>`;
-                                
-                                const button = popupContent.querySelector('button');
-                                if (button) {
-                                    button.onclick = () => onLocationSelect(name);
-                                }
-                                
-                                marker.bindPopup(popupContent).openPopup();
+                                button.innerText = buttonText;
                             });
                         }
                     });
@@ -124,25 +118,27 @@ const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, ro
         if (mapInstance.current && routeCoordinates) {
              import('leaflet').then(L => {
                 // This ensures leaflet-routing-machine is loaded
-                 if ((L as any).Routing) {
-                    if (routingControlRef.current) {
-                        mapInstance.current?.removeControl(routingControlRef.current);
-                    }
-
-                    routingControlRef.current = (L as any).Routing.control({
-                        waypoints: [
-                            L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
-                            L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
-                        ],
-                        routeWhileDragging: false,
-                        show: false, // Oculta el panel de instrucciones de ruta
-                        addWaypoints: false,
-                        draggableWaypoints: false,
-                        lineOptions: {
-                            styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
+                 import('leaflet-routing-machine').then(() => {
+                    if ((L as any).Routing) {
+                        if (routingControlRef.current) {
+                            mapInstance.current?.removeControl(routingControlRef.current);
                         }
-                    }).addTo(mapInstance.current);
-                }
+
+                        routingControlRef.current = (L as any).Routing.control({
+                            waypoints: [
+                                L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
+                                L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
+                            ],
+                            routeWhileDragging: false,
+                            show: false, // Oculta el panel de instrucciones de ruta
+                            addWaypoints: false,
+                            draggableWaypoints: false,
+                            lineOptions: {
+                                styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
+                            }
+                        }).addTo(mapInstance.current);
+                    }
+                 });
              });
         } else if (mapInstance.current && routingControlRef.current) {
             // If no route coordinates, remove the old route
