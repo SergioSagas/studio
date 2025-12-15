@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useActionState, useState } from 'react';
-import { useFormStatus } from 'react-dom';
 import { planSafeRoutesAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -11,14 +10,17 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { RouteRecommendations } from '@/components/route-recommendations';
 import { Loader2, Route } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { locations } from '@/lib/locations';
+import { locations, cityData } from '@/lib/city-layout';
 import { Input } from '@/components/ui/input';
+import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
+import type { LatLngTuple } from 'leaflet';
+
 
 function SubmitButton() {
-  const { pending } = useFormStatus();
+  const [,,isPending] = useActionState(planSafeRoutesAction, { status: 'idle' });
   return (
-    <Button type="submit" disabled={pending} className="w-full">
-      {pending ? (
+    <Button type="submit" disabled={isPending} className="w-full">
+      {isPending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
         <Route className="mr-2 h-4 w-4" />
@@ -28,21 +30,43 @@ function SubmitButton() {
   );
 }
 
-export function RoutesForm() {
+type RoutesFormProps = {
+    startLocation: string;
+    setStartLocation: (loc: string) => void;
+    endLocation: string;
+    setEndLocation: (loc: string) => void;
+    routeResult: RecommendSafeRoutesOutput | null;
+    onFormSubmit: (result: RecommendSafeRoutesOutput, startCoords: LatLngTuple, endCoords: LatLngTuple) => void;
+}
+
+export function RoutesForm({
+    startLocation,
+    setStartLocation,
+    endLocation,
+    setEndLocation,
+    routeResult,
+    onFormSubmit,
+}: RoutesFormProps) {
   const { toast } = useToast();
-  const [startLocation, setStartLocation] = useState('');
-  const [endLocation, setEndLocation] = useState('');
 
   const [state, formAction] = useActionState(planSafeRoutesAction, {
     status: 'idle',
   });
 
   useEffect(() => {
-    if (state.status === 'success') {
+    if (state.status === 'success' && state.data) {
       toast({
         title: 'Plan de Ruta Listo',
         description: state.message,
       });
+
+      const startCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[startLocation]?.coordenadas;
+      const endCoords = cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones[endLocation]?.coordenadas;
+
+      if(startCoords && endCoords) {
+          onFormSubmit(state.data, [startCoords.lat, startCoords.lng], [endCoords.lat, endCoords.lng]);
+      }
+
     } else if (state.status === 'error') {
       toast({
         title: 'Planificación Fallida',
@@ -50,7 +74,7 @@ export function RoutesForm() {
         variant: 'destructive',
       });
     }
-  }, [state, toast]);
+  }, [state, toast, onFormSubmit, startLocation, endLocation]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,7 +82,7 @@ export function RoutesForm() {
         <CardHeader>
           <CardTitle>Planifica Tu Viaje</CardTitle>
           <CardDescription>
-            Introduce tus puntos de inicio y fin para obtener recomendaciones de rutas seguras impulsadas por IA.
+            Selecciona en el formulario o haz clic en el mapa para elegir tus puntos de inicio y fin.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -141,8 +165,8 @@ export function RoutesForm() {
         </CardContent>
       </Card>
       
-      {state.status === 'success' && state.data && (
-          <RouteRecommendations recommendations={state.data} />
+      {state.status === 'success' && routeResult && (
+          <RouteRecommendations recommendations={routeResult} />
       )}
     </div>
   );

@@ -1,13 +1,22 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from './ui/button';
 import { Map as MapIcon, AlertTriangle } from 'lucide-react';
 import { cityData } from '@/lib/city-layout';
 import type L from 'leaflet';
+import 'leaflet-routing-machine';
 
+// --- Types ---
+type RoutesMapProps = {
+  onLocationSelect: (locationName: string) => void;
+  startLocationName?: string;
+  endLocationName?: string;
+  routeCoordinates: { start: L.LatLngTuple, end: L.LatLngTuple } | null;
+};
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps {
@@ -36,21 +45,18 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, { hasError: bool
     return this.props.children;
   }
 }
-// --- End Error Boundary ---
-
 
 // --- Map Component ---
-const MapComponent = () => {
+const MapComponent = ({ onLocationSelect, startLocationName, endLocationName, routeCoordinates }: RoutesMapProps) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<L.Map | null>(null);
-    // Centrar en la Plaza Mayor
+    const routingControlRef = useRef<L.Routing.Control | null>(null);
+
     const defaultPosition: L.LatLngTuple = [-9.122095, -78.531126];
 
     useEffect(() => {
         if (mapRef.current && !mapInstance.current) {
-            // Importar Leaflet dinámicamente solo en el cliente
             import('leaflet').then(L => {
-                // Corrige el problema del icono por defecto de Leaflet
                 delete (L.Icon.Default.prototype as any)._getIconUrl;
                 L.Icon.Default.mergeOptions({
                     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -58,7 +64,6 @@ const MapComponent = () => {
                     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
                 });
                 
-                // Evitar reinicialización
                 if (mapRef.current && !(mapRef.current as any)._leaflet_id) {
                     mapInstance.current = L.map(mapRef.current).setView(defaultPosition, 14);
 
@@ -66,12 +71,19 @@ const MapComponent = () => {
                         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     }).addTo(mapInstance.current);
 
-                    // Añadir marcadores desde cityData
                     Object.entries(cityData.Mapa_Base_Nuevo_Chimbote.ubicaciones).forEach(([name, details]) => {
                         if (details.coordenadas) {
-                            L.marker([details.coordenadas.lat, details.coordenadas.lng])
-                                .addTo(mapInstance.current!)
-                                .bindPopup(`<b>${name}</b>`);
+                            const marker = L.marker([details.coordenadas.lat, details.coordenadas.lng]).addTo(mapInstance.current!);
+                            const popupContent = document.createElement('div');
+                            popupContent.innerHTML = `<b>${name}</b><br/>`;
+                            
+                            const button = document.createElement('button');
+                            button.innerHTML = !startLocationName ? 'Elegir ubicación de inicio' : 'Elegir ubicación final';
+                            button.className = 'mt-2 p-2 bg-primary text-primary-foreground rounded text-xs';
+                            button.onclick = () => onLocationSelect(name);
+                            popupContent.appendChild(button);
+                            
+                            marker.bindPopup(popupContent);
                         }
                     });
                 }
@@ -79,8 +91,7 @@ const MapComponent = () => {
                 console.error("Failed to load Leaflet", err);
             });
         }
-
-        // Función de limpieza para destruir el mapa
+        
         return () => {
             if (mapInstance.current) {
                 mapInstance.current.remove();
@@ -88,6 +99,60 @@ const MapComponent = () => {
             }
         };
     }, []); 
+
+    // Effect to update popups when startLocationName changes
+    useEffect(() => {
+        if (!mapInstance.current) return;
+        mapInstance.current.eachLayer(layer => {
+            if (layer instanceof L.Marker) {
+                const popup = layer.getPopup();
+                if (popup) {
+                    const locationName = (popup.getContent() as string).match(/<b>(.*?)<\/b>/)?.[1];
+                    if (locationName) {
+                        const newButtonText = !startLocationName ? 'Elegir ubicación de inicio' : 'Elegir ubicación final';
+                        const existingButton = (popup.getElement()?.querySelector('button'));
+                        if (existingButton) {
+                             existingButton.innerHTML = newButtonText;
+                             if(locationName === startLocationName || locationName === endLocationName) {
+                                existingButton.disabled = true;
+                                existingButton.style.opacity = '0.5';
+                             } else {
+                                existingButton.disabled = false;
+                                existingButton.style.opacity = '1';
+                             }
+                        }
+                    }
+                }
+            }
+        })
+
+    }, [startLocationName, endLocationName]);
+
+
+    // Effect to draw the route
+    useEffect(() => {
+        if (mapInstance.current && routeCoordinates) {
+             import('leaflet').then(L => {
+                if (routingControlRef.current) {
+                    mapInstance.current?.removeControl(routingControlRef.current);
+                }
+
+                routingControlRef.current = L.Routing.control({
+                    waypoints: [
+                        L.latLng(routeCoordinates.start[0], routeCoordinates.start[1]),
+                        L.latLng(routeCoordinates.end[0], routeCoordinates.end[1])
+                    ],
+                    routeWhileDragging: false,
+                    show: false, // Oculta el panel de instrucciones de ruta
+                    addWaypoints: false,
+                    draggableWaypoints: false,
+                    lineOptions: {
+                        styles: [{ color: 'hsl(var(--primary))', opacity: 0.8, weight: 6 }]
+                    }
+                }).addTo(mapInstance.current);
+             });
+        }
+    }, [routeCoordinates]);
 
     return (
         <Card className="h-full min-h-[400px] lg:min-h-0">
@@ -99,9 +164,8 @@ const MapComponent = () => {
 };
 // --- End Map Component ---
 
-
 // --- Main Exported Component ---
-export default function RoutesMap() {
+export default function RoutesMap(props: RoutesMapProps) {
     const [showMap, setShowMap] = useState(false);
 
     const errorFallback = (
@@ -135,7 +199,7 @@ export default function RoutesMap() {
     
     return (
         <ErrorBoundary fallback={errorFallback}>
-            <MapComponent />
+            <MapComponent {...props} />
         </ErrorBoundary>
     );
 }
