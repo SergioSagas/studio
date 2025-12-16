@@ -5,6 +5,7 @@ import {
   Route,
   BarChart3,
   Siren,
+  FilePenLine,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -20,4 +21,5 @@ export const navItems: NavItem[] = [
   { href: '/routes', label: 'Rutas Seguras', icon: Route, exact: false },
   { href: '/patterns', label: 'Patrones', icon: BarChart3, exact: false },
   { href: '/alerts', label: 'Alertas', icon: Siren, exact: false },
+  { href: '/routes-draft', label: 'Rutas (Borrador)', icon: FilePenLine, exact: false },
 ];
