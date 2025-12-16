@@ -22,15 +22,16 @@ import {
 } from '@/components/ui/select';
 import { locations } from '@/lib/locations';
 import type { RecommendSafeRoutesOutput } from '@/ai/flows/recommend-safe-routes.flow';
+import { useToast } from '@/hooks/use-toast';
+
 
 interface RoutesFormProps {
     onRouteResult: (result: RecommendSafeRoutesOutput | null, start?: string, end?: string) => void;
 }
 
-function SubmitButton() {
-  const [,, isPending] = useActionState(planSafeRoutesAction, { status: 'idle' });
+function SubmitButton({ onClick, isPending }: { onClick: () => void, isPending: boolean}) {
   return (
-    <Button type="submit" disabled={isPending} className="w-full">
+    <Button type="submit" disabled={isPending} className="w-full" onClick={onClick}>
       {isPending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
@@ -42,29 +43,22 @@ function SubmitButton() {
 }
 
 export function RoutesForm({ onRouteResult }: RoutesFormProps) {
-  const [state, formAction] = useActionState(planSafeRoutesAction, { status: 'idle' });
+  const { toast } = useToast();
+  const [state, formAction, isPending] = useActionState(planSafeRoutesAction, { status: 'idle' });
   const formRef = useRef<HTMLFormElement>(null);
-  const initialStateRef = useRef<RouteState>({ status: 'idle' });
-
+  
   useEffect(() => {
-    // Notify parent only when a successful result is received from the action
     if (state.status === 'success' && state.data) {
       onRouteResult(state.data, state.startLocation, state.endLocation);
     } else if (state.status === 'error') {
-      // Clear results on error
       onRouteResult(null);
+      toast({
+        variant: 'destructive',
+        title: 'Error en la Planificación',
+        description: state.message || 'No se pudieron generar las rutas. Por favor, inténtelo más tarde.',
+      });
     }
-  }, [state, onRouteResult]);
-
-  const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    
-    // Clear previous results when starting a new search
-    onRouteResult(null); 
-    
-    formAction(formData);
-  };
+  }, [state, onRouteResult, toast]);
 
   return (
     <Card>
@@ -78,7 +72,7 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
       <CardContent>
         <form
           ref={formRef}
-          onSubmit={handleFormSubmit}
+          action={formAction}
           className="space-y-4"
         >
           <div className="grid w-full items-center gap-1.5">
@@ -152,7 +146,10 @@ export function RoutesForm({ onRouteResult }: RoutesFormProps) {
               </div>
             </RadioGroup>
           </div>
-          <SubmitButton />
+          <SubmitButton 
+             isPending={isPending}
+             onClick={() => onRouteResult(null)}
+          />
         </form>
       </CardContent>
     </Card>
