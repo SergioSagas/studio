@@ -23,13 +23,24 @@ import type { FirebaseApp } from 'firebase/app';
   }
   (window as any).analyticsScriptAttached = true;
 
-  const trackEvent = (event: MouseEvent) => {
+  // 1. In-memory object to accumulate click stats for the session.
+  const sessionStats: { [elementId: string]: number } = {};
+  let isSaving = false;
+
+  // 2. Function to save the accumulated stats to Firestore.
+  const saveStatsToFirestore = () => {
+    // Prevent saving if a save is already in progress or if there's nothing to save.
+    if (isSaving || Object.keys(sessionStats).length === 0) {
+      return;
+    }
+
+    isSaving = true;
+
     try {
-      // Lazily get Firebase services to ensure they are initialized
-      // This is a safeguard; in practice, the provider should ensure this.
-      const app: FirebaseApp = (window as any)._firebaseApp; // Assuming provider makes it available
+      const app: FirebaseApp = (window as any)._firebaseApp;
       if (!app) {
-        // Silently fail if Firebase is not available
+        // Silently fail if Firebase is not initialized.
+        isSaving = false;
         return;
       }
 
@@ -37,79 +48,94 @@ import type { FirebaseApp } from 'firebase/app';
       const auth: Auth = getAuth(app);
       const user = auth.currentUser;
 
-      const target = event.target as HTMLElement;
-      if (!target) return;
-
-      // Find the most relevant element with an ID
-      const trackedElement = target.closest('[id]') as HTMLElement;
-      const elementId = trackedElement ? trackedElement.id : 'unidentified_element';
-      
-      // Don't track clicks on non-interactive elements unless they have a specific ID
-      const isInteractive = trackedElement?.tagName === 'BUTTON' || trackedElement?.tagName === 'A' || trackedElement?.hasAttribute('role');
-      if (elementId === 'unidentified_element' && !isInteractive) {
-        return;
-      }
-
       const batch = writeBatch(db);
+      let totalSessionClicks = 0;
 
-      // 1. Heatmap: Log interaction details
-      const interactionRef = doc(
-        db,
-        `interacciones/${Timestamp.now().toMillis()}_${user?.uid || 'anonymous'}`
-      );
-      batch.set(interactionRef, {
-        x: event.clientX,
-        y: event.clientY,
-        elementId: elementId,
-        pageUrl: window.location.pathname,
-        timestamp: Timestamp.now(),
-        userId: user?.uid || 'anonymous',
-      });
+      // Iterate over the accumulated stats.
+      for (const elementId in sessionStats) {
+        if (Object.prototype.hasOwnProperty.call(sessionStats, elementId)) {
+          const clicks = sessionStats[elementId];
+          totalSessionClicks += clicks;
 
-      // 2. Button Counter: Increment clicks for the specific element ID
-      if (elementId !== 'unidentified_element') {
-        const buttonStatRef = doc(db, 'stats_botones', elementId);
-        batch.set(
-          buttonStatRef,
-          { clicks: increment(1), lastClicked: Timestamp.now() },
-          { merge: true }
-        );
+          // Update stats_botones for each element.
+          const buttonStatRef = doc(db, 'stats_botones', elementId);
+          batch.set(
+            buttonStatRef,
+            { clicks: increment(clicks), lastClicked: Timestamp.now() },
+            { merge: true }
+          );
+        }
       }
       
-      // 3. User Metrics: Increment total clicks for the logged-in user
+      // Update stats_usuarios for the current user.
       if (user) {
         const userStatRef = doc(db, 'stats_usuarios', user.uid);
         batch.set(
           userStatRef,
           { 
-              total_clicks: increment(1),
+              total_clicks: increment(totalSessionClicks),
               lastActive: Timestamp.now(),
-              email: user.email // Store for reference
+              email: user.email
           },
           { merge: true }
         );
       }
 
-      // 4. Global Metrics: Increment total platform clicks
+      // Update global platform clicks.
       const globalStatRef = doc(db, 'config', 'dashboard');
       batch.set(
         globalStatRef,
-        { total_clicks_plataforma: increment(1) },
+        { total_clicks_plataforma: increment(totalSessionClicks) },
         { merge: true }
       );
-
-      // Commit the batch
-      batch.commit().catch(() => {
-        // Silently fail on network or permission error
+      
+      // Commit the batch and clean up.
+      batch.commit().then(() => {
+        // Clear the session stats after successful save.
+        for (const key in sessionStats) {
+          delete sessionStats[key];
+        }
+      }).catch(() => {
+        // Silently fail on network/permission error.
+        // The data will remain in sessionStats and will be retried on the next event.
+      }).finally(() => {
+        isSaving = false;
       });
+
     } catch (error) {
-      // Silently catch any errors (e.g., Firebase not initialized)
+      // Silently catch any errors (e.g., Firebase not initialized).
+      isSaving = false;
     }
   };
 
-  // Attach listener to the document
+
+  // 3. Passive global click listener.
+  const trackEvent = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (!target) return;
+
+    const trackedElement = target.closest('[id]') as HTMLElement;
+    const elementId = trackedElement ? trackedElement.id : null;
+
+    if (!elementId) return; // Only track elements with an ID.
+
+    // Increment the counter in the local session object.
+    sessionStats[elementId] = (sessionStats[elementId] || 0) + 1;
+  };
+  
   document.addEventListener('click', trackEvent, {
-    capture: true, // Captures event on the way down
-    passive: true, // Does not block scrolling or other default actions
+    capture: true,
+    passive: true,
   });
+
+  // 4. Attach listeners to save stats when the user navigates away.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      saveStatsToFirestore();
+    }
+  });
+
+  // 'pagehide' is more reliable for mobile browsers.
+  window.addEventListener('pagehide', saveStatsToFirestore);
+
 })();
