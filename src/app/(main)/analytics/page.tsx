@@ -1,7 +1,6 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { useUserRole } from '@/hooks/useUserRole';
 import { useFirestore, useCollection, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
@@ -20,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AlertTriangle, MousePointerClick, Users, User, BarChart } from 'lucide-react';
+import { MousePointerClick, Users, User, BarChart } from 'lucide-react';
 import { type GlobalConfig, type ButtonStats, type UserStats } from '@/lib/analytics-types';
 
 function StatCard({
@@ -170,31 +169,6 @@ function AnalyticsDashboard() {
 }
 
 export default function AnalyticsPage() {
-  const { role, isLoading: isLoadingRole } = useUserRole();
-
-  if (isLoadingRole) {
-    return (
-        <div className="flex flex-col gap-8">
-            <PageHeader
-                title="Analítica de la Plataforma"
-                description="Métricas de interacción del usuario y popularidad de funciones."
-            />
-            <Loader className="h-64" />
-        </div>
-    );
-  }
-
-  if (role !== 'admin') {
-    return (
-      <div className="flex h-full flex-col items-center justify-center text-center">
-        <AlertTriangle className="size-16 text-destructive" />
-        <h1 className="mt-4 text-2xl font-bold">Acceso Denegado</h1>
-        <p className="text-muted-foreground">
-          Esta sección está disponible solo para administradores.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-8">

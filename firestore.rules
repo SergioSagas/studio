@@ -96,28 +96,28 @@ service cloud.firestore {
     }
     
     /**
-     * @description Colecciones de analítica. La lectura se permite solo para administradores.
+     * @description Colecciones de analítica. La lectura se permite solo para usuarios autenticados.
      *              La escritura está permitida para fines de seguimiento pasivo.
      */
     match /interacciones/{interactionId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow write: if true;
     }
 
     match /stats_botones/{elementId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow write: if true;
     }
 
     match /stats_usuarios/{userId} {
-      // El admin puede leer todas las estadísticas. El usuario puede escribir las suyas.
-      allow read: if isAdmin();
+      // El usuario puede leer y escribir sus propias estadísticas.
+      allow read: if isSignedIn();
       allow write: if isOwner(userId);
     }
 
     match /config/dashboard {
-      // El admin puede leer la configuración global.
-      allow read: if isAdmin();
+      // Cualquier usuario autenticado puede leer la configuración global.
+      allow read: if isSignedIn();
       allow write: if true;
     }
   }
