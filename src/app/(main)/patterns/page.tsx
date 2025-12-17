@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { AlertTriangle, MapPin, Target, ShieldCheck } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { type DetectCrimePatternsOutput } from '@/ai/flows/detect-crime-patterns.flow';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
@@ -43,12 +43,16 @@ export default function PatternsPage() {
     () => (firestore ? collection(firestore, 'incidentReports') : null),
     [firestore]
   );
-  const { data: reports, isLoading: isLoadingReports } = useCollection<Omit<IncidentReport, 'id'>>(reportsQuery);
+  const { data: allReports, isLoading: isLoadingReports } = useCollection<Omit<IncidentReport, 'id'>>(reportsQuery);
+
+  const activeReports = useMemo(() => {
+    return allReports?.filter(report => report.status !== 'resolved') ?? null;
+  }, [allReports]);
 
   useEffect(() => {
-    if (reports && reports.length > 0) {
+    if (activeReports && activeReports.length > 0) {
       setIsLoadingPatterns(true);
-      fetchCrimePatternsAction(reports)
+      fetchCrimePatternsAction(activeReports)
         .then(data => {
           setPatternsData(data);
         })
@@ -58,7 +62,7 @@ export default function PatternsPage() {
     } else if (!isLoadingReports) {
         setIsLoadingPatterns(false);
     }
-  }, [reports, isLoadingReports]);
+  }, [activeReports, isLoadingReports]);
   
   const hasData = patternsData && patternsData.patterns.length > 0;
   const hasAnalysis = hasData && patternsData.analysis;

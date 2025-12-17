@@ -19,13 +19,15 @@ import {
   Clock,
   ThumbsUp,
   ThumbsDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy, doc, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, orderBy, doc, writeBatch, increment, updateDoc } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useUserRole } from '@/hooks/useUserRole';
 
 
 function getRiskBadgeVariant(riskLevel: IncidentReport['riskLevel']) {
@@ -47,6 +49,7 @@ function AlertCard({ report }: { report: IncidentReport }) {
   const { toast } = useToast();
   const [isVoting, setIsVoting] = useState(false);
   const firestore = useFirestore();
+  const { role } = useUserRole();
 
   const handleVote = async (voteType: 'confirm' | 'dispute') => {
     if (!user || !firestore) return;
@@ -109,25 +112,49 @@ function AlertCard({ report }: { report: IncidentReport }) {
     }
   };
 
+  const handleResolve = async () => {
+    if (!user || !firestore || role !== 'security') return;
+    setIsVoting(true);
+    try {
+        const reportRef = doc(firestore, 'incidentReports', report.id);
+        await updateDoc(reportRef, { status: 'resolved' });
+        toast({
+            title: 'Incidente Resuelto',
+            description: 'El incidente ha sido marcado como resuelto.',
+        });
+    } catch (error: any) {
+        console.error("Resolve failed:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al Resolver',
+            description: error.message || 'No se pudo actualizar el incidente.',
+        });
+    } finally {
+        setIsVoting(false);
+    }
+  };
+
   const isOwner = user?.uid === report.userId;
   const confirmations = Array.isArray(report.confirmations) ? report.confirmations : [];
   const disputes = Array.isArray(report.disputes) ? report.disputes : [];
   const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
   const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
   const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
+  const canResolve = role === 'security' && !isFinalStatus;
 
   const riskLevelText = report.riskLevel === 'low' ? 'Bajo' : report.riskLevel === 'medium' ? 'Medio' : 'Alto';
   
-  const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
+  const getStatusTextAndVariant = (status: IncidentReport['status'] | undefined | null): {text: string; variant: "default" | "destructive" | "secondary" } => {
     switch (status) {
-        case 'confirmed': return 'Confirmado';
-        case 'disputed': return 'Disputado';
-        case 'false': return 'Falso';
+        case 'confirmed': return { text: 'Confirmado', variant: 'default' };
+        case 'disputed': return { text: 'Disputado', variant: 'destructive' };
+        case 'false': return { text: 'Falso', variant: 'destructive' };
+        case 'resolved': return { text: 'Resuelto', variant: 'default' };
         case 'unverified':
-        default: return 'Sin verificar';
+        default: return { text: 'Sin verificar', variant: 'secondary' };
     }
   }
-  const statusText = getStatusText(report.status);
+  const { text: statusText, variant: statusVariant } = getStatusTextAndVariant(report.status);
 
 
   return (
@@ -171,8 +198,14 @@ function AlertCard({ report }: { report: IncidentReport }) {
                   {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ThumbsDown className="size-4 mr-2" />}
                   {disputes.length}
               </Button>
+               {role === 'security' && (
+                <Button onClick={handleResolve} variant="outline" size="sm" disabled={!canResolve || isVoting} aria-label="Resolver">
+                    {isVoting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <ShieldCheck className="size-4 mr-2" />}
+                    Resolver
+                </Button>
+               )}
             </div>
-             <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
+             <Badge variant={statusVariant} className="capitalize">
               {statusText}
             </Badge>
           </div>

@@ -42,7 +42,7 @@ import { PageHeader } from '@/components/page-header';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useState, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking, useUser, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, orderBy, limit, writeBatch, increment, arrayUnion } from 'firebase/firestore';
 import { Loader } from '@/components/ui/loader';
 import {
@@ -199,6 +199,24 @@ export default function DashboardPage() {
     }
   };
 
+  const handleResolve = async (report: IncidentReport) => {
+    if (!user || !firestore || role !== 'security') return;
+    setIsActionPending(report.id);
+    try {
+        const reportRef = doc(firestore, 'incidentReports', report.id);
+        updateDocumentNonBlocking(reportRef, { status: 'resolved' });
+        toast({
+            title: 'Incidente Resuelto',
+            description: 'El incidente ha sido marcado como resuelto.',
+        });
+    } catch (error: any) {
+      console.error("Resolve failed:", error);
+      // Let global error handler show toast
+    } finally {
+      setIsActionPending(null);
+    }
+  };
+
   const reportsQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, 'incidentReports') : null),
     [firestore]
@@ -214,7 +232,7 @@ export default function DashboardPage() {
 
 
   const activeAlerts = useMemo(() => reports?.filter(
-    (r) => r.riskLevel === 'high' || r.riskLevel === 'medium'
+    (r) => r.status !== 'resolved' && (r.riskLevel === 'high' || r.riskLevel === 'medium')
   ).length ?? 0, [reports]);
 
   const reportsToday = useMemo(() => reports?.filter(
@@ -226,7 +244,7 @@ export default function DashboardPage() {
     if (!reports) return { count: 0, names: 'Calculando...' };
 
     const riskCountsByLocation = reports
-      .filter(r => r.riskLevel === 'high' || r.riskLevel === 'medium')
+      .filter(r => r.status !== 'resolved' && (r.riskLevel === 'high' || r.riskLevel === 'medium'))
       .reduce((acc, report) => {
         const location = report.location;
         acc[location] = (acc[location] || 0) + 1;
@@ -258,13 +276,14 @@ export default function DashboardPage() {
     setEditingReport(report);
   }
 
-  const getStatusText = (status: IncidentReport['status'] | undefined | null) => {
+  const getStatusTextAndVariant = (status: IncidentReport['status'] | undefined | null): {text: string; variant: "default" | "destructive" | "secondary" } => {
     switch (status) {
-        case 'confirmed': return 'Confirmado';
-        case 'disputed': return 'Disputado';
-        case 'false': return 'Falso';
+        case 'confirmed': return { text: 'Confirmado', variant: 'default' };
+        case 'disputed': return { text: 'Disputado', variant: 'destructive' };
+        case 'false': return { text: 'Falso', variant: 'destructive' };
+        case 'resolved': return { text: 'Resuelto', variant: 'default' };
         case 'unverified':
-        default: return 'Sin verificar';
+        default: return { text: 'Sin verificar', variant: 'secondary' };
     }
   }
 
@@ -275,6 +294,7 @@ export default function DashboardPage() {
     const hasVoted = confirmations.includes(user?.uid ?? '') || disputes.includes(user?.uid ?? '');
     const isFinalStatus = !(['unverified', undefined, null].includes(report.status));
     const canVote = user && !isOwner && !hasVoted && !isFinalStatus;
+    const canResolve = role === 'security' && !isFinalStatus;
     const isPending = isActionPending === report.id;
 
     if (role === 'admin') {
@@ -316,6 +336,39 @@ export default function DashboardPage() {
           </div>
         </TooltipProvider>
       )
+    }
+
+    if (role === 'security') {
+        return (
+            <TooltipProvider>
+                <div className="flex justify-end gap-1">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={() => handleUserVote(report, 'confirm')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4" />}
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Confirmar ({confirmations.length})</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={() => handleUserVote(report, 'dispute')} variant="ghost" size="icon" disabled={!canVote || isPending}>
+                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Disputar ({disputes.length})</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={() => handleResolve(report)} variant="ghost" size="icon" disabled={!canResolve || isPending}>
+                            {isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ShieldCheck className="h-4 w-4" />}
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Resolver</p></TooltipContent>
+                    </Tooltip>
+                </div>
+            </TooltipProvider>
+        )
     }
 
     return (
@@ -432,8 +485,8 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                          <div className="flex items-center gap-2">
                             <Info className="size-4 text-muted-foreground" />
-                            <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
-                              {getStatusText(report.status)}
+                            <Badge variant={getStatusTextAndVariant(report.status).variant} className="capitalize">
+                              {getStatusTextAndVariant(report.status).text}
                             </Badge>
                          </div>
                          {renderReportActions(report)}
@@ -473,8 +526,8 @@ export default function DashboardPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={report.status === 'confirmed' ? 'default' : report.status === 'disputed' || report.status === 'false' ? 'destructive' : 'secondary'} className="capitalize">
-                                  {getStatusText(report.status)}
+                              <Badge variant={getStatusTextAndVariant(report.status).variant} className="capitalize">
+                                  {getStatusTextAndVariant(report.status).text}
                                 </Badge>
                             </TableCell>
                             <TableCell>{report.location}</TableCell>

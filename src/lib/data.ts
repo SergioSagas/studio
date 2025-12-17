@@ -7,7 +7,7 @@ export type IncidentReport = {
   riskLevel: 'low' | 'medium' | 'high';
   reportTime: string;
   summary: string;
-  status: 'unverified' | 'confirmed' | 'disputed' | 'false';
+  status: 'unverified' | 'confirmed' | 'disputed' | 'false' | 'resolved';
   confirmations: string[];
   disputes: string[];
 };

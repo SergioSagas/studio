@@ -26,6 +26,11 @@ service cloud.firestore {
       return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
     }
 
+    // Función auxiliar para verificar si el usuario es de seguridad
+    function isSecurity() {
+        return isSignedIn() && getUserData(request.auth.uid).role == 'security';
+    }
+
     // Función auxiliar para verificar si el usuario es el propietario de un documento
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -69,19 +74,21 @@ service cloud.firestore {
       allow create: if isSignedIn();
 
       // Las actualizaciones ahora se permiten bajo condiciones estrictas para la votación,
-      // o si el usuario es un administrador.
+      // administradores, o personal de seguridad.
       allow update: if isAdmin() || (
+        // Lógica de votación del usuario
         isSignedIn() &&
-        // El usuario no es el autor del reporte
         request.auth.uid != resource.data.userId &&
-        // El usuario no ha votado antes en ninguna de las dos listas
         !(request.auth.uid in resource.data.confirmations) &&
         !(request.auth.uid in resource.data.disputes) &&
-        // Solo se pueden modificar los arrays de votos o el status
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['confirmations', 'disputes', 'status']) &&
-        // El usuario solo puede añadir su propio UID a la lista de votos
         (request.resource.data.confirmations.hasAll(resource.data.confirmations.concat([request.auth.uid])) ||
          request.resource.data.disputes.hasAll(resource.data.disputes.concat([request.auth.uid])))
+      ) || (
+        // Personal de seguridad puede marcar como resuelto
+        isSecurity() &&
+        request.resource.data.status == 'resolved' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
       );
         
       // Solo los administradores pueden eliminar informes.
