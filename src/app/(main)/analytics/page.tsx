@@ -56,8 +56,7 @@ function StatCard({
   );
 }
 
-export default function AnalyticsPage() {
-  const { role, isLoading: isLoadingRole } = useUserRole();
+function AnalyticsDashboard() {
   const firestore = useFirestore();
 
   // Queries
@@ -72,31 +71,10 @@ export default function AnalyticsPage() {
   const { data: userStats, isLoading: isLoadingUsers } = useCollection<UserStats>(userStatsQuery);
   const { data: interactions, isLoading: isLoadingInteractions } = useCollection<any>(interactionsQuery);
 
-  const isLoading = isLoadingRole || isLoadingConfig || isLoadingButtons || isLoadingUsers || isLoadingInteractions;
-
-  if (isLoadingRole) {
-    return <Loader className="h-64" />;
-  }
-
-  if (role !== 'admin') {
-    return (
-      <div className="flex h-full flex-col items-center justify-center text-center">
-        <AlertTriangle className="size-16 text-destructive" />
-        <h1 className="mt-4 text-2xl font-bold">Acceso Denegado</h1>
-        <p className="text-muted-foreground">
-          Esta sección está disponible solo para administradores.
-        </p>
-      </div>
-    );
-  }
+  const isLoading = isLoadingConfig || isLoadingButtons || isLoadingUsers || isLoadingInteractions;
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Analítica de la Plataforma"
-        description="Métricas de interacción del usuario y popularidad de funciones."
-      />
-
+    <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total de Clics"
@@ -187,6 +165,44 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+    </>
+  )
+}
+
+export default function AnalyticsPage() {
+  const { role, isLoading: isLoadingRole } = useUserRole();
+
+  if (isLoadingRole) {
+    return (
+        <div className="flex flex-col gap-8">
+            <PageHeader
+                title="Analítica de la Plataforma"
+                description="Métricas de interacción del usuario y popularidad de funciones."
+            />
+            <Loader className="h-64" />
+        </div>
+    );
+  }
+
+  if (role !== 'admin') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center text-center">
+        <AlertTriangle className="size-16 text-destructive" />
+        <h1 className="mt-4 text-2xl font-bold">Acceso Denegado</h1>
+        <p className="text-muted-foreground">
+          Esta sección está disponible solo para administradores.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="Analítica de la Plataforma"
+        description="Métricas de interacción del usuario y popularidad de funciones."
+      />
+      <AnalyticsDashboard />
     </div>
   );
 }
