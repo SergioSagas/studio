@@ -94,5 +94,30 @@ service cloud.firestore {
       // Solo los administradores pueden eliminar informes.
       allow delete: if isAdmin();
     }
+    
+    /**
+     * @description Colecciones de analítica. Solo se permite la escritura.
+     *              La lectura debe hacerse a través de funciones en la nube o la consola para proteger la privacidad.
+     */
+    match /interacciones/{interactionId} {
+      allow read: if false;
+      allow write: if true; // Cualquiera puede escribir, la validación se hace en el cliente.
+    }
+
+    match /stats_botones/{elementId} {
+      allow read: if false;
+      allow write: if true;
+    }
+
+    match /stats_usuarios/{userId} {
+      allow read: if false;
+      // Solo el propio usuario puede escribir sus estadísticas.
+      allow write: if isOwner(userId);
+    }
+
+    match /config/dashboard {
+      allow read: if false;
+      allow write: if true;
+    }
   }
 }

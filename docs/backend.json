@@ -121,6 +121,50 @@
         }
       },
       "required": ["userId", "message", "type", "timestamp", "read"]
+    },
+    "Interaction": {
+        "title": "Interaction",
+        "description": "Represents a single user interaction (e.g., a click) for heatmap analysis.",
+        "type": "object",
+        "properties": {
+            "userId": { "type": "string" },
+            "pageUrl": { "type": "string" },
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "elementId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["userId", "pageUrl", "x", "y", "timestamp"]
+    },
+    "ButtonStats": {
+        "title": "ButtonStats",
+        "description": "Tracks click counts for individual interactive elements.",
+        "type": "object",
+        "properties": {
+            "clicks": { "type": "number" },
+            "lastClicked": { "type": "string", "format": "date-time" }
+        },
+        "required": ["clicks", "lastClicked"]
+    },
+    "UserStats": {
+        "title": "UserStats",
+        "description": "Tracks aggregate statistics for a single user.",
+        "type": "object",
+        "properties": {
+            "total_clicks": { "type": "number" },
+            "lastActive": { "type": "string", "format": "date-time" },
+            "email": { "type": "string", "format": "email"}
+        },
+        "required": ["total_clicks", "lastActive", "email"]
+    },
+    "GlobalConfig": {
+        "title": "GlobalConfig",
+        "description": "Stores global configuration and aggregate metrics for the platform.",
+        "type": "object",
+        "properties": {
+            "total_clicks_plataforma": { "type": "number" }
+        },
+        "required": []
     }
   },
   "auth": {
@@ -146,6 +190,22 @@
             "$ref": "#/entities/Notification"
         },
         "description": "Stores notifications for a specific user."
+    },
+    "/interacciones/{interactionId}": {
+        "schema": { "$ref": "#/entities/Interaction" },
+        "description": "Stores individual click events for heatmap analysis."
+    },
+    "/stats_botones/{elementId}": {
+        "schema": { "$ref": "#/entities/ButtonStats" },
+        "description": "Stores click counts for specific UI elements, identified by their HTML ID."
+    },
+    "/stats_usuarios/{userId}": {
+        "schema": { "$ref": "#/entities/UserStats" },
+        "description": "Stores aggregate interaction statistics for each user."
+    },
+    "/config/dashboard": {
+        "schema": { "$ref": "#/entities/GlobalConfig" },
+        "description": "A singleton document for storing global platform-wide metrics."
     }
   }
 }
